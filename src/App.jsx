@@ -50,7 +50,16 @@ async function fetchMissions(batimentId) {
   return api(`/rest/v1/missions?batiment_id=eq.${batimentId}&select=*&order=id.asc`);
 }
 async function addMissionsDB(batimentId, missions) {
-  const rows = missions.map(m => ({ batiment_id: batimentId, code: m.code, label: m.label, un_prevu: m.unPrevu, un_propose: m.unPropose, realise: m.realise, intervenant: m.intervenant, commentaires: m.commentaires }));
+  const rows = missions.map(m => ({
+    batiment_id: batimentId,
+    code: m.code,
+    label: m.label,
+    un_prevu: "",
+    un_propose: "",
+    realise: false,
+    intervenant: "",
+    commentaires: ""
+  }));
   return api("/rest/v1/missions", "POST", rows);
 }
 async function updateMissionDB(id, data) { return api(`/rest/v1/missions?id=eq.${id}`, "PATCH", data); }
@@ -154,7 +163,8 @@ function CommunePage({ user, onSelectCommune, onLogout }) {
   const addCommune = async () => {
     if (!newCommune.trim()) return;
     try {
-      const [created] = await addCommuneDB(newCommune.trim());
+      const res = await addCommuneDB(newCommune.trim());
+      const created = Array.isArray(res) ? res[0] : res;
       setCommunes(prev => [...prev, created].sort((a,b)=>a.nom.localeCompare(b.nom,"fr")));
       setNewCommune("");
     } catch(e) { alert("Erreur lors de l'ajout : " + e.message); }
@@ -302,9 +312,19 @@ function MainApp({ user, commune, onBack, onLogout }) {
   const addBatiment = async () => {
     if (!newBatiment.trim()) return;
     try {
-      const [bat] = await addBatimentDB(commune.id, newBatiment.trim());
-      const missions = await addMissionsDB(bat.id, MISSIONS_DEF.map(m => ({ ...m, unPrevu:"", unPropose:"", realise:false, intervenant:"", commentaires:"" })));
-      setBatiments(prev => [...prev, { ...bat, expanded:true, missions: missions.map(m=>({...m, unPrevu:m.un_prevu, unPropose:m.un_propose})) }]);
+      const batData = await addBatimentDB(commune.id, newBatiment.trim());
+      const bat = Array.isArray(batData) ? batData[0] : batData;
+      // Insert missions one by one to avoid bulk insert issues
+      const createdMissions = [];
+      for (const m of MISSIONS_DEF) {
+        const res = await api("/rest/v1/missions", "POST", {
+          batiment_id: bat.id, code: m.code, label: m.label,
+          un_prevu: "", un_propose: "", realise: false, intervenant: "", commentaires: ""
+        });
+        const mission = Array.isArray(res) ? res[0] : res;
+        if (mission) createdMissions.push({ ...mission, unPrevu: "", unPropose: "" });
+      }
+      setBatiments(prev => [...prev, { ...bat, expanded: true, missions: createdMissions }]);
       setNewBatiment("");
     } catch(e) { alert("Erreur : " + e.message); }
   };
