@@ -17,15 +17,17 @@ async function verifierSalarie(code) {
 }
 
 // ─── API Supabase ──────────────────────────────────────────────────────────
-const H = { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+const H = { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, Prefer: "return=representation" };
 
 async function api(path, method = "GET", body = null) {
   const opts = { method, headers: H };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(SUPABASE_URL + path, opts);
   if (!res.ok) throw new Error(`API error ${res.status}`);
-  if (method === "DELETE" || res.status === 204) return null;
-  return res.json();
+  if (method === "DELETE") return null;
+  const text = await res.text();
+  if (!text || text.trim() === "") return null;
+  return JSON.parse(text);
 }
 
 // Communes
