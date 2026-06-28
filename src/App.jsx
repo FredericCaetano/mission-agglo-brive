@@ -149,8 +149,8 @@ function LoginPage({ onLogin }) {
         <div style={{ textAlign:"center", marginBottom:36 }}>
           <img src={SOCOTEC_LOGO} alt="Socotec" style={{ width:140, margin:"0 auto 16px", display:"block" }} />
           <div style={{ color:"rgba(255,255,255,0.6)", fontSize:12, letterSpacing:3, textTransform:"uppercase", marginBottom:6 }}>Agglomération de Brive</div>
-          <h1 style={{ color:"white", margin:0, fontSize:24, fontWeight:700 }}>MISSION AGGLO</h1>
-          <div style={{ color:"#60a5fa", fontSize:14, marginTop:4 }}>Brive – 2026</div>
+          <h1 style={{ color:"white", margin:0, fontSize:24, fontWeight:700 }}>MISSION AGGLO 2026 - 2029</h1>
+          <div style={{ color:"#60a5fa", fontSize:14, marginTop:4 }}>SOCOTEC BRIVE</div>
         </div>
         <div style={{ background:"white", borderRadius:16, padding:"32px 28px", boxShadow:"0 24px 64px rgba(0,0,0,0.35)" }}>
           <h2 style={{ margin:"0 0 24px", fontSize:17, color:"#1e3a5f", fontWeight:700, textAlign:"center" }}>Connexion</h2>
@@ -713,7 +713,7 @@ export default function App() {
         envoyerNotification(user, [...actionsLog.current]);
         actionsLog.current = [];
       }
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 10 * 60 * 1000); // 5 minutes
   };
 
   const handleLogout = () => {
