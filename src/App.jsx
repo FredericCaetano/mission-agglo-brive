@@ -81,16 +81,25 @@ async function envoyerNotification(user, actions) {
   if (!actions || actions.length === 0) return;
   try {
     const actionsHtml = actions.map(a => `<li style="margin-bottom:6px;color:#475569">${a}</li>`).join("");
-    await fetch(`${SUPABASE_URL}/rest/v1/rpc/notify_activity`, {
+    const body = {
+      p_user_code: String(user.code),
+      p_user_nom: user.nom,
+      p_user_prenom: user.prenom,
+      p_actions: `<ul style="padding-left:20px;margin:0">${actionsHtml}</ul>`
+    };
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/notify_activity`, {
       method: "POST",
-      headers: { ...H, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        p_user_code: String(user.code),
-        p_user_nom: user.nom,
-        p_user_prenom: user.prenom,
-        p_actions: `<ul style="padding-left:20px;margin:0">${actionsHtml}</ul>`
-      })
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify(body)
     });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("Notification error:", err);
+    }
   } catch(e) { console.error("Notification error:", e); }
 }
 
@@ -475,7 +484,10 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                   <div onClick={()=>toggleExpand(bat.id, bat.expanded)} style={{ display:"flex", alignItems:"center", padding:"14px 20px", background:"linear-gradient(90deg,#1e3a5f,#2a4a7f)", cursor:"pointer", userSelect:"none" }}>
                     <span style={{ color:"#60a5fa", fontSize:11, fontWeight:700, marginRight:12, letterSpacing:1 }}>#{String(batIdx+1).padStart(2,"0")}</span>
                     <span style={{ color:"white", fontWeight:700, fontSize:14, flex:1 }}>{bat.nom}</span>
-                    <span style={{ color:"#93c5fd", fontSize:12, marginRight:16 }}>Prévu: <b>{batPrevu.toFixed(1)}</b> UM &nbsp;|&nbsp; Proposé: <b>{batPropose.toFixed(1)}</b> UM</span>
+                    <span style={{ color:"#93c5fd", fontSize:12, marginRight:16 }}>
+                      Prévu: <b>{batPrevu.toFixed(1)}</b> UM &nbsp;|&nbsp; Proposé: <b>{batPropose.toFixed(1)}</b> UM &nbsp;|&nbsp;
+                      <span style={{ color:"#a5b4fc" }}>{bat.missions.length} mission{bat.missions.length !== 1 ? "s" : ""}</span>
+                    </span>
                     <button onClick={(e)=>{e.stopPropagation();setRenameBatiment(bat);setRenameValue(bat.nom);}} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"white", borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:12, marginRight:6 }}>✏️ Renommer</button>
                     <button onClick={(e)=>{e.stopPropagation();setConfirmDelete(bat);}} style={{ background:"rgba(255,100,100,0.2)", border:"none", color:"#fca5a5", borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:12, marginRight:10 }}>✕ Supprimer</button>
                     <span style={{ color:"white", fontSize:18, display:"inline-block", transform:bat.expanded?"rotate(180deg)":"rotate(0deg)", transition:"transform 0.2s" }}>⌄</span>
