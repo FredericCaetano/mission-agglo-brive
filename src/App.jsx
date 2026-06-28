@@ -34,7 +34,9 @@ async function api(path, method = "GET", body = null) {
 }
 
 // Communes
-async function fetchCommunes() { return api("/rest/v1/communes?select=id,nom&order=nom.asc"); }
+async function fetchCommunes() {
+  return api("/rest/v1/communes?select=id,nom,batiments(count)&order=nom.asc");
+}
 async function addCommuneDB(nom) { return api("/rest/v1/communes", "POST", { nom }); }
 async function deleteCommuneDB(id) { return api(`/rest/v1/communes?id=eq.${id}`, "DELETE"); }
 
@@ -160,7 +162,10 @@ function CommunePage({ user, onSelectCommune, onLogout }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
 
   useEffect(() => {
-    fetchCommunes().then(data => { setCommunes(data); setLoading(false); }).catch(()=>setLoading(false));
+    setLoading(true);
+    fetchCommunes()
+      .then(data => { setCommunes(data); setLoading(false); })
+      .catch(()=>setLoading(false));
   }, []);
 
   const addCommune = async () => {
@@ -219,11 +224,18 @@ function CommunePage({ user, onSelectCommune, onLogout }) {
             {filtered.map((commune) => (
               <div key={commune.id} style={{ position:"relative" }}>
                 <button onClick={()=>onSelectCommune(commune)}
-                  style={{ width:"100%", background:"white", border:"1px solid #e2e8f0", borderRadius:12, padding:"20px 16px 16px", cursor:"pointer", textAlign:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", transition:"all 0.2s", display:"flex", flexDirection:"column", alignItems:"center", gap:10 }}
+                  style={{ width:"100%", background:"white", border:"1px solid #e2e8f0", borderRadius:12, padding:"20px 16px 16px", cursor:"pointer", textAlign:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", transition:"all 0.2s", display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}
                   onMouseEnter={(e)=>{ e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,0.2)"; e.currentTarget.style.borderColor="#2563eb"; e.currentTarget.style.transform="translateY(-2px)"; }}
                   onMouseLeave={(e)=>{ e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.06)"; e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.transform="translateY(0)"; }}>
                   <span style={{ fontSize:32 }}>🏘️</span>
                   <span style={{ fontWeight:700, color:"#1e3a5f", fontSize:14, lineHeight:1.3 }}>{commune.nom}</span>
+                  <span style={{
+                    background: commune.batiments?.[0]?.count > 0 ? "#dbeafe" : "#f1f5f9",
+                    color: commune.batiments?.[0]?.count > 0 ? "#1e3a5f" : "#94a3b8",
+                    fontSize:11, fontWeight:700, padding:"2px 10px", borderRadius:20, marginTop:2
+                  }}>
+                    {commune.batiments?.[0]?.count || 0} bâtiment{(commune.batiments?.[0]?.count || 0) !== 1 ? "s" : ""}
+                  </span>
                 </button>
                 <button onClick={()=>setConfirmDelete(commune)} title="Supprimer cette commune"
                   style={{ position:"absolute", top:8, right:8, background:"rgba(239,68,68,0.1)", border:"none", borderRadius:6, color:"#ef4444", fontSize:13, fontWeight:700, cursor:"pointer", padding:"3px 7px", lineHeight:1 }}
@@ -516,7 +528,10 @@ function MainApp({ user, commune, onBack, onLogout }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [commune, setCommune] = useState(null);
+
+  const handleBack = () => setCommune(null);
+
   if (!user) return <LoginPage onLogin={setUser} />;
   if (!commune) return <CommunePage user={user} onSelectCommune={setCommune} onLogout={()=>setUser(null)} />;
-  return <MainApp user={user} commune={commune} onBack={()=>setCommune(null)} onLogout={()=>{ setUser(null); setCommune(null); }} />;
+  return <MainApp user={user} commune={commune} onBack={handleBack} onLogout={()=>{ setUser(null); setCommune(null); }} />;
 }
