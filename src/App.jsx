@@ -149,8 +149,8 @@ function LoginPage({ onLogin }) {
         <div style={{ textAlign:"center", marginBottom:36 }}>
           <img src={SOCOTEC_LOGO} alt="Socotec" style={{ width:140, margin:"0 auto 16px", display:"block" }} />
           <div style={{ color:"rgba(255,255,255,0.6)", fontSize:12, letterSpacing:3, textTransform:"uppercase", marginBottom:6 }}>Agglomération de Brive</div>
-          <h1 style={{ color:"white", margin:0, fontSize:24, fontWeight:700 }}>MISSION AGGLO 2026 - 2029</h1>
-          <div style={{ color:"#60a5fa", fontSize:14, marginTop:4 }}>SOCOTEC BRIVE</div>
+          <h1 style={{ color:"white", margin:0, fontSize:24, fontWeight:700 }}>MISSION AGGLO</h1>
+          <div style={{ color:"#60a5fa", fontSize:14, marginTop:4 }}>Brive – 2026</div>
         </div>
         <div style={{ background:"white", borderRadius:16, padding:"32px 28px", boxShadow:"0 24px 64px rgba(0,0,0,0.35)" }}>
           <h2 style={{ margin:"0 0 24px", fontSize:17, color:"#1e3a5f", fontWeight:700, textAlign:"center" }}>Connexion</h2>
@@ -313,6 +313,7 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDeleteMission, setConfirmDeleteMission] = useState(null);
   const [addMissionOpen, setAddMissionOpen] = useState({});
+  const [editingBatId, setEditingBatId] = useState(null); // id du bâtiment en cours d'édition
   const [missionPicker, setMissionPicker] = useState(null);
   const [pickerSelections, setPickerSelections] = useState([]);
   const [renameBatiment, setRenameBatiment] = useState(null); // {id, nom}
@@ -489,6 +490,11 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                       <span style={{ color:"#a5b4fc" }}>{bat.missions.length} mission{bat.missions.length !== 1 ? "s" : ""}</span>
                     </span>
                     <button onClick={(e)=>{e.stopPropagation();setRenameBatiment(bat);setRenameValue(bat.nom);}} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"white", borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:12, marginRight:6 }}>✏️ Renommer</button>
+                    {editingBatId === bat.id ? (
+                      <button onClick={(e)=>{e.stopPropagation();setEditingBatId(null);}} style={{ background:"rgba(52,211,153,0.25)", border:"none", color:"#6ee7b7", borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700, marginRight:6 }}>✓ Terminer</button>
+                    ) : (
+                      <button onClick={(e)=>{e.stopPropagation();setEditingBatId(bat.id);}} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"white", borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:12, marginRight:6 }}>🖊 Modifier</button>
+                    )}
                     <button onClick={(e)=>{e.stopPropagation();setConfirmDelete(bat);}} style={{ background:"rgba(255,100,100,0.2)", border:"none", color:"#fca5a5", borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:12, marginRight:10 }}>✕ Supprimer</button>
                     <span style={{ color:"white", fontSize:18, display:"inline-block", transform:bat.expanded?"rotate(180deg)":"rotate(0deg)", transition:"transform 0.2s" }}>⌄</span>
                   </div>
@@ -506,17 +512,42 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                             <tr key={mission.id} style={{ background:i%2===0?"#f8fafc":"white" }}>
                               <td style={{...td,fontWeight:700,color:"#1e3a5f",whiteSpace:"nowrap"}}><span style={{ background:missionColors[mission.code]||"#f0f9ff", padding:"3px 8px", borderRadius:5, fontSize:11 }}>{mission.code}</span></td>
                               <td style={{...td,color:"#475569"}}>{mission.label}</td>
-                              <td style={td}><input type="number" step="0.5" value={mission.unPrevu} onChange={(e)=>updateMission(bat.id,mission.id,"unPrevu",e.target.value)} placeholder="—" style={inputStyle}/></td>
-                              <td style={td}><input type="number" step="0.5" value={mission.unPropose} onChange={(e)=>updateMission(bat.id,mission.id,"unPropose",e.target.value)} placeholder="—" style={inputStyle}/></td>
-                              <td style={{...td,textAlign:"center"}}><input type="checkbox" checked={mission.realise} onChange={(e)=>updateMission(bat.id,mission.id,"realise",e.target.checked)} style={{ width:18,height:18,cursor:"pointer",accentColor:"#2563eb" }}/></td>
-                              <td style={td}><input type="text" value={mission.intervenant} onChange={(e)=>updateMission(bat.id,mission.id,"intervenant",e.target.value)} placeholder="Nom..." style={{...inputStyle,width:"100%"}}/></td>
-                              <td style={td}><input type="text" value={mission.commentaires} onChange={(e)=>updateMission(bat.id,mission.id,"commentaires",e.target.value)} placeholder="Commentaire..." style={{...inputStyle,width:"100%"}}/></td>
-                              <td style={{...td,textAlign:"center"}}><button onClick={()=>setConfirmDeleteMission({batId:bat.id, missionId:mission.id, code:mission.code, label:mission.label})} title="Supprimer cette mission" style={{ background:"none", border:"none", cursor:"pointer", color:"#fca5a5", fontSize:16, padding:"2px 6px", borderRadius:4 }} onMouseEnter={(e)=>e.currentTarget.style.background="#fee2e2"} onMouseLeave={(e)=>e.currentTarget.style.background="none"}>✕</button></td>
+                              <td style={td}>
+                                {editingBatId === bat.id
+                                  ? <input type="number" step="0.5" value={mission.unPrevu} onChange={(e)=>updateMission(bat.id,mission.id,"unPrevu",e.target.value)} placeholder="—" style={inputStyle}/>
+                                  : <span style={{ display:"block", textAlign:"center", color:mission.unPrevu?"#1e3a5f":"#cbd5e1", fontSize:13, padding:"6px 10px" }}>{mission.unPrevu||"—"}</span>}
+                              </td>
+                              <td style={td}>
+                                {editingBatId === bat.id
+                                  ? <input type="number" step="0.5" value={mission.unPropose} onChange={(e)=>updateMission(bat.id,mission.id,"unPropose",e.target.value)} placeholder="—" style={inputStyle}/>
+                                  : <span style={{ display:"block", textAlign:"center", color:mission.unPropose?"#1e3a5f":"#cbd5e1", fontSize:13, padding:"6px 10px" }}>{mission.unPropose||"—"}</span>}
+                              </td>
+                              <td style={{...td,textAlign:"center"}}>
+                                <input type="checkbox" checked={mission.realise} onChange={(e)=>editingBatId===bat.id&&updateMission(bat.id,mission.id,"realise",e.target.checked)}
+                                  style={{ width:18,height:18,cursor:editingBatId===bat.id?"pointer":"default",accentColor:"#2563eb",opacity:editingBatId===bat.id?1:0.6 }}/>
+                              </td>
+                              <td style={td}>
+                                {editingBatId === bat.id
+                                  ? <input type="text" value={mission.intervenant} onChange={(e)=>updateMission(bat.id,mission.id,"intervenant",e.target.value)} placeholder="Nom..." style={{...inputStyle,width:"100%"}}/>
+                                  : <span style={{ display:"block", color:mission.intervenant?"#1e3a5f":"#cbd5e1", fontSize:13, padding:"6px 10px" }}>{mission.intervenant||"—"}</span>}
+                              </td>
+                              <td style={td}>
+                                {editingBatId === bat.id
+                                  ? <input type="text" value={mission.commentaires} onChange={(e)=>updateMission(bat.id,mission.id,"commentaires",e.target.value)} placeholder="Commentaire..." style={{...inputStyle,width:"100%"}}/>
+                                  : <span style={{ display:"block", color:mission.commentaires?"#1e3a5f":"#cbd5e1", fontSize:13, padding:"6px 10px" }}>{mission.commentaires||"—"}</span>}
+                              </td>
+                              <td style={{...td,textAlign:"center"}}>
+                                {editingBatId === bat.id && (
+                                  <button onClick={()=>setConfirmDeleteMission({batId:bat.id, missionId:mission.id, code:mission.code, label:mission.label})} title="Supprimer cette mission"
+                                    style={{ background:"none", border:"none", cursor:"pointer", color:"#fca5a5", fontSize:16, padding:"2px 6px", borderRadius:4 }}
+                                    onMouseEnter={(e)=>e.currentTarget.style.background="#fee2e2"} onMouseLeave={(e)=>e.currentTarget.style.background="none"}>✕</button>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      {availableMissions.length > 0 && (
+                      {availableMissions.length > 0 && editingBatId === bat.id && (
                         <div style={{ padding:"10px 16px", borderTop:"1px dashed #e2e8f0", display:"flex", alignItems:"center", gap:10 }}>
                           {addMissionOpen[bat.id] ? (<>
                             <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Ajouter une mission :</span>
@@ -713,7 +744,7 @@ export default function App() {
         envoyerNotification(user, [...actionsLog.current]);
         actionsLog.current = [];
       }
-    }, 1 * 60 * 1000); // 5 minutes
+    }, 5 * 60 * 1000); // 5 minutes
   };
 
   const handleLogout = () => {
