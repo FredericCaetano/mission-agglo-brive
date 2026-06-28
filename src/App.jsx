@@ -296,7 +296,7 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
 // APPLICATION PRINCIPALE (SAISIE)
 // ══════════════════════════════════════════════════════════════════════════════
 function MainApp({ user, commune, onBack, onLogout, logAction }) {
-  const [batiments, setBatimentsRaw] = useState([]);
+  const [batiments, setBatiments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newBatiment, setNewBatiment] = useState("");
   const [view, setView] = useState("table");
@@ -306,22 +306,8 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
   const [addMissionOpen, setAddMissionOpen] = useState({});
   const [missionPicker, setMissionPicker] = useState(null);
   const [pickerSelections, setPickerSelections] = useState([]);
-  const historyRef = useRef([]);
-
-  const setBatiments = (updater) => {
-    setBatimentsRaw(prev => {
-      historyRef.current = [...historyRef.current.slice(-20), prev];
-      return typeof updater === "function" ? updater(prev) : updater;
-    });
-  };
-
-  const undo = () => {
-    if (!historyRef.current.length) return;
-    const prev = historyRef.current[historyRef.current.length - 1];
-    historyRef.current = historyRef.current.slice(0, -1);
-    setBatimentsRaw(prev);
-  };
-  const canUndo = historyRef.current.length > 0;
+  const [renameBatiment, setRenameBatiment] = useState(null); // {id, nom}
+  const [renameValue, setRenameValue] = useState("");
 
   useEffect(() => {
     loadAll();
@@ -371,6 +357,18 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
       setBatiments(prev => prev.map(b => b.id === batId ? { ...b, missions: [...b.missions, newM] } : b));
       setAddMissionOpen(o => ({ ...o, [batId]: false }));
     } catch(e) { console.error(e); }
+  };
+
+  const renameBatimentFn = async () => {
+    if (!renameValue.trim() || !renameBatiment) return;
+    const oldNom = renameBatiment.nom;
+    setBatiments(prev => prev.map(b => b.id === renameBatiment.id ? { ...b, nom: renameValue.trim() } : b));
+    try {
+      await updateBatimentDB(renameBatiment.id, { nom: renameValue.trim() });
+      logAction(`[${commune.nom}] Bâtiment renommé : <strong>${oldNom}</strong> → <strong>${renameValue.trim()}</strong>`);
+    } catch(e) { alert("Erreur : " + e.message); }
+    setRenameBatiment(null);
+    setRenameValue("");
   };
 
   const toggleExpand = async (batId, current) => {
@@ -432,11 +430,6 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
             <button onClick={onBack} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid rgba(255,255,255,0.25)", background:"transparent", color:"rgba(255,255,255,0.7)", fontSize:12, cursor:"pointer", fontWeight:600 }}>← Communes</button>
             <button onClick={onLogout} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid rgba(255,255,255,0.25)", background:"transparent", color:"rgba(255,255,255,0.7)", fontSize:12, cursor:"pointer", fontWeight:600 }}>Déconnexion</button>
             <div style={{ width:1, height:28, background:"rgba(255,255,255,0.2)" }} />
-            <button onClick={undo} disabled={!canUndo} title="Annuler la dernière action"
-              style={{ padding:"8px 16px", borderRadius:8, border:"none", cursor:canUndo?"pointer":"not-allowed", fontWeight:600, fontSize:13, display:"flex", alignItems:"center", gap:6, background:canUndo?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.07)", color:canUndo?"white":"rgba(255,255,255,0.35)" }}>
-              ↩ Annuler
-            </button>
-            <div style={{ width:1, height:28, background:"rgba(255,255,255,0.2)" }} />
             <button onClick={()=>setView("table")} style={{ padding:"8px 18px", borderRadius:8, border:"none", cursor:"pointer", fontWeight:600, fontSize:13, background:view==="table"?"white":"rgba(255,255,255,0.15)", color:view==="table"?"#1e3a5f":"white" }}>📋 Saisie</button>
             <button onClick={()=>setView("summary")} style={{ padding:"8px 18px", borderRadius:8, border:"none", cursor:"pointer", fontWeight:600, fontSize:13, background:view==="summary"?"white":"rgba(255,255,255,0.15)", color:view==="summary"?"#1e3a5f":"white" }}>📊 Récapitulatif</button>
           </div>
@@ -483,6 +476,7 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                     <span style={{ color:"#60a5fa", fontSize:11, fontWeight:700, marginRight:12, letterSpacing:1 }}>#{String(batIdx+1).padStart(2,"0")}</span>
                     <span style={{ color:"white", fontWeight:700, fontSize:14, flex:1 }}>{bat.nom}</span>
                     <span style={{ color:"#93c5fd", fontSize:12, marginRight:16 }}>Prévu: <b>{batPrevu.toFixed(1)}</b> UM &nbsp;|&nbsp; Proposé: <b>{batPropose.toFixed(1)}</b> UM</span>
+                    <button onClick={(e)=>{e.stopPropagation();setRenameBatiment(bat);setRenameValue(bat.nom);}} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"white", borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:12, marginRight:6 }}>✏️ Renommer</button>
                     <button onClick={(e)=>{e.stopPropagation();setConfirmDelete(bat);}} style={{ background:"rgba(255,100,100,0.2)", border:"none", color:"#fca5a5", borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:12, marginRight:10 }}>✕ Supprimer</button>
                     <span style={{ color:"white", fontSize:18, display:"inline-block", transform:bat.expanded?"rotate(180deg)":"rotate(0deg)", transition:"transform 0.2s" }}>⌄</span>
                   </div>
@@ -574,6 +568,29 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
           </div>
         )}
       </div>
+      {/* Modale renommage bâtiment */}
+      {renameBatiment && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1001, backdropFilter:"blur(2px)" }}>
+          <div style={{ background:"white", borderRadius:14, padding:"28px 32px", maxWidth:420, width:"90%", boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
+            <div style={{ fontSize:32, textAlign:"center", marginBottom:12 }}>✏️</div>
+            <h2 style={{ margin:"0 0 8px", fontSize:18, color:"#1e3a5f", fontWeight:700, textAlign:"center" }}>Renommer le bâtiment</h2>
+            <p style={{ color:"#64748b", fontSize:13, margin:"0 0 20px", textAlign:"center" }}>Nom actuel : <strong>{renameBatiment.nom}</strong></p>
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e)=>setRenameValue(e.target.value)}
+              onKeyDown={(e)=>e.key==="Enter"&&renameBatimentFn()}
+              autoFocus
+              style={{ width:"100%", padding:"11px 14px", borderRadius:8, border:"1.5px solid #2563eb", fontSize:15, outline:"none", boxSizing:"border-box", marginBottom:20 }}
+            />
+            <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+              <button onClick={()=>{ setRenameBatiment(null); setRenameValue(""); }} style={{ padding:"10px 24px", borderRadius:8, border:"1px solid #e2e8f0", background:"white", color:"#475569", fontWeight:600, fontSize:14, cursor:"pointer" }}>Annuler</button>
+              <button onClick={renameBatimentFn} disabled={!renameValue.trim()} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:renameValue.trim()?"#2563eb":"#93c5fd", color:"white", fontWeight:700, fontSize:14, cursor:renameValue.trim()?"pointer":"not-allowed" }}>Renommer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation suppression bâtiment */}
       {confirmDelete && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, backdropFilter:"blur(2px)" }}>
