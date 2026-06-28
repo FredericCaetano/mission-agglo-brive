@@ -23,7 +23,10 @@ async function api(path, method = "GET", body = null) {
   const opts = { method, headers: H };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(SUPABASE_URL + path, opts);
-  if (!res.ok) throw new Error(`API error ${res.status}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`API error ${res.status}: ${errText}`);
+  }
   if (method === "DELETE") return null;
   const text = await res.text();
   if (!text || text.trim() === "") return null;
@@ -40,7 +43,7 @@ async function fetchBatiments(communeId) {
   return api(`/rest/v1/batiments?commune_id=eq.${communeId}&select=id,nom,expanded,ordre&order=ordre.asc`);
 }
 async function addBatimentDB(communeId, nom) {
-  return api("/rest/v1/batiments", "POST", { commune_id: communeId, nom, expanded: true, ordre: Date.now() });
+  return api("/rest/v1/batiments", "POST", { commune_id: communeId, nom, expanded: true, ordre: 0 });
 }
 async function deleteBatimentDB(id) { return api(`/rest/v1/batiments?id=eq.${id}`, "DELETE"); }
 async function updateBatimentDB(id, data) { return api(`/rest/v1/batiments?id=eq.${id}`, "PATCH", data); }
