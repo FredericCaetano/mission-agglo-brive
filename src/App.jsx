@@ -278,7 +278,10 @@ function MainApp({ user, commune, onBack, onLogout }) {
   const [view, setView] = useState("table");
   const [search, setSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmDeleteMission, setConfirmDeleteMission] = useState(null); // {batId, missionId, code}
   const [addMissionOpen, setAddMissionOpen] = useState({});
+  const [missionPicker, setMissionPicker] = useState(null); // {nom} = nom du bâtiment en cours de création
+  const [pickerSelections, setPickerSelections] = useState([]); // none selected by default
 
   useEffect(() => {
     loadAll();
@@ -442,7 +445,7 @@ function MainApp({ user, commune, onBack, onLogout }) {
                               <td style={{...td,textAlign:"center"}}><input type="checkbox" checked={mission.realise} onChange={(e)=>updateMission(bat.id,mission.id,"realise",e.target.checked)} style={{ width:18,height:18,cursor:"pointer",accentColor:"#2563eb" }}/></td>
                               <td style={td}><input type="text" value={mission.intervenant} onChange={(e)=>updateMission(bat.id,mission.id,"intervenant",e.target.value)} placeholder="Nom..." style={{...inputStyle,width:"100%"}}/></td>
                               <td style={td}><input type="text" value={mission.commentaires} onChange={(e)=>updateMission(bat.id,mission.id,"commentaires",e.target.value)} placeholder="Commentaire..." style={{...inputStyle,width:"100%"}}/></td>
-                              <td style={{...td,textAlign:"center"}}><button onClick={()=>removeMission(bat.id,mission.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#fca5a5", fontSize:16, padding:"2px 6px", borderRadius:4 }} onMouseEnter={(e)=>e.currentTarget.style.background="#fee2e2"} onMouseLeave={(e)=>e.currentTarget.style.background="none"}>✕</button></td>
+                              <td style={{...td,textAlign:"center"}}><button onClick={()=>setConfirmDeleteMission({batId:bat.id, missionId:mission.id, code:mission.code, label:mission.label})} title="Supprimer cette mission" style={{ background:"none", border:"none", cursor:"pointer", color:"#fca5a5", fontSize:16, padding:"2px 6px", borderRadius:4 }} onMouseEnter={(e)=>e.currentTarget.style.background="#fee2e2"} onMouseLeave={(e)=>e.currentTarget.style.background="none"}>✕</button></td>
                             </tr>
                           ))}
                         </tbody>
@@ -466,8 +469,11 @@ function MainApp({ user, commune, onBack, onLogout }) {
               );
             })}
             <div style={{ background:"white", borderRadius:12, padding:"16px 20px", border:"2px dashed #cbd5e1", display:"flex", gap:12, alignItems:"center" }}>
-              <input type="text" value={newBatiment} onChange={(e)=>setNewBatiment(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&addBatiment()} placeholder="Nom du nouveau bâtiment..." style={{ flex:1, padding:"10px 14px", borderRadius:8, border:"1px solid #cbd5e1", fontSize:14, outline:"none" }}/>
-              <button onClick={addBatiment} style={{ background:"#2563eb", color:"white", border:"none", borderRadius:8, padding:"10px 20px", fontWeight:700, fontSize:14, cursor:"pointer" }}>+ Ajouter bâtiment</button>
+              <input type="text" value={newBatiment} onChange={(e)=>setNewBatiment(e.target.value)}
+                onKeyDown={(e)=>e.key==="Enter"&&newBatiment.trim()&&(setMissionPicker(newBatiment.trim()),setPickerSelections([]))}
+                placeholder="Nom du nouveau bâtiment..." style={{ flex:1, padding:"10px 14px", borderRadius:8, border:"1px solid #cbd5e1", fontSize:14, outline:"none" }}/>
+              <button onClick={()=>{ if(newBatiment.trim()){ setMissionPicker(newBatiment.trim()); setPickerSelections([]); }}}
+                style={{ background:"#2563eb", color:"white", border:"none", borderRadius:8, padding:"10px 20px", fontWeight:700, fontSize:14, cursor:"pointer" }}>+ Ajouter bâtiment</button>
             </div>
           </>
         ) : (
@@ -508,6 +514,7 @@ function MainApp({ user, commune, onBack, onLogout }) {
           </div>
         )}
       </div>
+      {/* Confirmation suppression bâtiment */}
       {confirmDelete && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, backdropFilter:"blur(2px)" }}>
           <div style={{ background:"white", borderRadius:14, padding:"28px 32px", maxWidth:420, width:"90%", boxShadow:"0 20px 60px rgba(0,0,0,0.25)", textAlign:"center" }}>
@@ -517,6 +524,82 @@ function MainApp({ user, commune, onBack, onLogout }) {
             <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
               <button onClick={()=>setConfirmDelete(null)} style={{ padding:"10px 24px", borderRadius:8, border:"1px solid #e2e8f0", background:"white", color:"#475569", fontWeight:600, fontSize:14, cursor:"pointer" }}>Annuler</button>
               <button onClick={()=>removeBatiment(confirmDelete.id)} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#ef4444", color:"white", fontWeight:700, fontSize:14, cursor:"pointer" }}>Oui, supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation suppression mission */}
+      {confirmDeleteMission && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1001, backdropFilter:"blur(2px)" }}>
+          <div style={{ background:"white", borderRadius:14, padding:"28px 32px", maxWidth:420, width:"90%", boxShadow:"0 20px 60px rgba(0,0,0,0.25)", textAlign:"center" }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>⚠️</div>
+            <h2 style={{ margin:"0 0 8px", fontSize:18, color:"#1e3a5f", fontWeight:700 }}>Supprimer la mission ?</h2>
+            <p style={{ color:"#64748b", fontSize:14, margin:"0 0 8px", lineHeight:1.5 }}>
+              Vous allez supprimer la mission <strong style={{ color:"#1e3a5f" }}>{confirmDeleteMission.code} — {confirmDeleteMission.label}</strong>.
+            </p>
+            <p style={{ color:"#ef4444", fontSize:13, margin:"0 0 24px" }}>Toutes les données saisies pour cette mission seront perdues.</p>
+            <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+              <button onClick={()=>setConfirmDeleteMission(null)} style={{ padding:"10px 24px", borderRadius:8, border:"1px solid #e2e8f0", background:"white", color:"#475569", fontWeight:600, fontSize:14, cursor:"pointer" }}>Annuler</button>
+              <button onClick={()=>{ removeMission(confirmDeleteMission.batId, confirmDeleteMission.missionId); setConfirmDeleteMission(null); }} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#ef4444", color:"white", fontWeight:700, fontSize:14, cursor:"pointer" }}>Oui, supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sélecteur de missions à l'ajout d'un bâtiment */}
+      {missionPicker && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1001, backdropFilter:"blur(2px)" }}>
+          <div style={{ background:"white", borderRadius:16, padding:"32px", maxWidth:500, width:"90%", boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
+            <h2 style={{ margin:"0 0 4px", fontSize:18, color:"#1e3a5f", fontWeight:700 }}>Choisir les missions</h2>
+            <p style={{ color:"#64748b", fontSize:13, margin:"0 0 12px" }}>Bâtiment : <strong>{missionPicker}</strong></p>
+            <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+              <button onClick={()=>setPickerSelections(MISSIONS_DEF.map(m=>m.code))}
+                style={{ padding:"6px 14px", borderRadius:8, border:"1px solid #2563eb", background:"#eff6ff", color:"#2563eb", fontWeight:600, fontSize:12, cursor:"pointer" }}>
+                ✓ Tout sélectionner
+              </button>
+              <button onClick={()=>setPickerSelections([])}
+                style={{ padding:"6px 14px", borderRadius:8, border:"1px solid #e2e8f0", background:"white", color:"#64748b", fontWeight:600, fontSize:12, cursor:"pointer" }}>
+                ✕ Tout décocher
+              </button>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:24 }}>
+              {MISSIONS_DEF.map(m => {
+                const selected = pickerSelections.includes(m.code);
+                return (
+                  <label key={m.code} onClick={()=>setPickerSelections(prev => selected ? prev.filter(c=>c!==m.code) : [...prev, m.code])}
+                    style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", borderRadius:8, border:`1.5px solid ${selected?"#2563eb":"#e2e8f0"}`, background:selected?"#eff6ff":"white", cursor:"pointer", transition:"all 0.15s" }}>
+                    <div style={{ width:20, height:20, borderRadius:5, border:`2px solid ${selected?"#2563eb":"#cbd5e1"}`, background:selected?"#2563eb":"white", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                      {selected && <span style={{ color:"white", fontSize:13, fontWeight:700 }}>✓</span>}
+                    </div>
+                    <span style={{ background:missionColors[m.code]||"#f0f9ff", padding:"2px 8px", borderRadius:4, fontSize:11, fontWeight:700, color:"#1e3a5f" }}>{m.code}</span>
+                    <span style={{ fontSize:13, color:"#475569", fontWeight:500 }}>{m.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={()=>{ setMissionPicker(null); setNewBatiment(""); }} style={{ padding:"10px 20px", borderRadius:8, border:"1px solid #e2e8f0", background:"white", color:"#475569", fontWeight:600, fontSize:14, cursor:"pointer" }}>Annuler</button>
+              <button disabled={pickerSelections.length===0}
+                onClick={async ()=>{
+                  try {
+                    const batData = await addBatimentDB(commune.id, missionPicker);
+                    const bat = Array.isArray(batData) ? batData[0] : batData;
+                    const selectedDefs = MISSIONS_DEF.filter(m => pickerSelections.includes(m.code));
+                    const createdMissions = [];
+                    for (const m of selectedDefs) {
+                      const res = await api("/rest/v1/missions", "POST", { batiment_id: bat.id, code: m.code, label: m.label, un_prevu:"", un_propose:"", realise:false, intervenant:"", commentaires:"" });
+                      const mission = Array.isArray(res) ? res[0] : res;
+                      if (mission) createdMissions.push({ ...mission, unPrevu:"", unPropose:"" });
+                    }
+                    setBatiments(prev => [...prev, { ...bat, expanded:true, missions:createdMissions }]);
+                    setNewBatiment("");
+                    setMissionPicker(null);
+                  } catch(e) { alert("Erreur : " + e.message); }
+                }}
+                style={{ padding:"10px 24px", borderRadius:8, border:"none", background:pickerSelections.length===0?"#93c5fd":"#2563eb", color:"white", fontWeight:700, fontSize:14, cursor:pickerSelections.length===0?"not-allowed":"pointer" }}>
+                Créer le bâtiment ({pickerSelections.length} mission{pickerSelections.length!==1?"s":""})
+              </button>
             </div>
           </div>
         </div>
