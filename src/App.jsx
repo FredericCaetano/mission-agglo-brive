@@ -216,7 +216,7 @@ function MainApp({ user, onLogout }) {
       <div style={{ background:"linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)", padding:"20px 32px", color:"white", boxShadow:"0 4px 20px rgba(37,99,235,0.3)" }}>
         <div style={{ maxWidth:1400, margin:"0 auto", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
           <div style={{ display:"flex", alignItems:"center", gap:16 }}>
-            <img src={SOCOTEC_LOGO} alt="Socotec" style={{ height:48 }} />
+            <img src={SOCOTEC_LOGO} alt="Socotec" style={{ height:64 }} />
             <div>
               <div style={{ fontSize:11, letterSpacing:2, textTransform:"uppercase", opacity:0.7, marginBottom:4 }}>Agglomération de Brive</div>
               <h1 style={{ margin:0, fontSize:22, fontWeight:700, letterSpacing:0.5 }}>MISSION AGGLO – BRIVE 2026</h1>
