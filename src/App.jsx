@@ -79,7 +79,7 @@ function LoginPage({ onLogin }) {
       <div style={{ width:"100%", maxWidth:420, padding:"0 20px" }}>
         {/* Logo / titre */}
         <div style={{ textAlign:"center", marginBottom:36 }}>
-          <div style={{ width:64, height:64, borderRadius:16, background:"rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", fontSize:32 }}>🏛️</div>
+          <img src="/socotec.png" alt="Socotec" style={{ width:120, margin:"0 auto 16px", display:"block", filter:"brightness(0) invert(1)" }} />
           <div style={{ color:"rgba(255,255,255,0.6)", fontSize:12, letterSpacing:3, textTransform:"uppercase", marginBottom:6 }}>Agglomération de Brive</div>
           <h1 style={{ color:"white", margin:0, fontSize:24, fontWeight:700 }}>MISSION AGGLO</h1>
           <div style={{ color:"#60a5fa", fontSize:14, marginTop:4 }}>Brive – 2026</div>
