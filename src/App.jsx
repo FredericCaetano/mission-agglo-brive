@@ -123,16 +123,21 @@ function LoginPage({ onLogin }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // PAGE CHOIX DE LA COMMUNE
 // ══════════════════════════════════════════════════════════════════════════════
-function CommunePage({ user, onSelectCommune, onLogout }) {
-  const [communes, setCommunes] = useState(COMMUNES_INITIALES);
+function CommunePage({ user, communes, setCommunes, onSelectCommune, onLogout }) {
   const [newCommune, setNewCommune] = useState("");
   const [search, setSearch] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const addCommune = () => {
     if (newCommune.trim() && !communes.includes(newCommune.trim())) {
       setCommunes(prev => [...prev, newCommune.trim()].sort((a,b) => a.localeCompare(b,"fr")));
       setNewCommune("");
     }
+  };
+
+  const deleteCommune = (nom) => {
+    setCommunes(prev => prev.filter(c => c !== nom));
+    setConfirmDelete(null);
   };
 
   const filtered = search.trim()
@@ -179,18 +184,33 @@ function CommunePage({ user, onSelectCommune, onLogout }) {
         {/* Grille des communes */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:16, marginBottom:32 }}>
           {filtered.map((commune) => (
-            <button key={commune} onClick={()=>onSelectCommune(commune)}
-              style={{
-                background:"white", border:"1px solid #e2e8f0", borderRadius:12, padding:"20px 16px",
-                cursor:"pointer", textAlign:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.06)",
-                transition:"all 0.2s", display:"flex", flexDirection:"column", alignItems:"center", gap:10
-              }}
-              onMouseEnter={(e)=>{ e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,0.2)"; e.currentTarget.style.borderColor="#2563eb"; e.currentTarget.style.transform="translateY(-2px)"; }}
-              onMouseLeave={(e)=>{ e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.06)"; e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.transform="translateY(0)"; }}
-            >
-              <span style={{ fontSize:32 }}>🏘️</span>
-              <span style={{ fontWeight:700, color:"#1e3a5f", fontSize:14, lineHeight:1.3 }}>{commune}</span>
-            </button>
+            <div key={commune} style={{ position:"relative" }}>
+              <button onClick={()=>onSelectCommune(commune)}
+                style={{
+                  width:"100%", background:"white", border:"1px solid #e2e8f0", borderRadius:12, padding:"20px 16px",
+                  cursor:"pointer", textAlign:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.06)",
+                  transition:"all 0.2s", display:"flex", flexDirection:"column", alignItems:"center", gap:10
+                }}
+                onMouseEnter={(e)=>{ e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,0.2)"; e.currentTarget.style.borderColor="#2563eb"; e.currentTarget.style.transform="translateY(-2px)"; }}
+                onMouseLeave={(e)=>{ e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.06)"; e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.transform="translateY(0)"; }}
+              >
+                <span style={{ fontSize:32 }}>🏘️</span>
+                <span style={{ fontWeight:700, color:"#1e3a5f", fontSize:14, lineHeight:1.3 }}>{commune}</span>
+              </button>
+              {/* Bouton supprimer */}
+              <button
+                onClick={(e)=>{ e.stopPropagation(); setConfirmDelete(commune); }}
+                title="Supprimer cette commune"
+                style={{
+                  position:"absolute", top:8, right:8,
+                  background:"rgba(239,68,68,0.1)", border:"none", borderRadius:6,
+                  color:"#ef4444", fontSize:13, fontWeight:700, cursor:"pointer",
+                  padding:"3px 7px", lineHeight:1, transition:"background 0.15s"
+                }}
+                onMouseEnter={(e)=>e.currentTarget.style.background="rgba(239,68,68,0.25)"}
+                onMouseLeave={(e)=>e.currentTarget.style.background="rgba(239,68,68,0.1)"}
+              >✕</button>
+            </div>
           ))}
         </div>
 
@@ -205,13 +225,29 @@ function CommunePage({ user, onSelectCommune, onLogout }) {
           </button>
         </div>
       </div>
+
+      {/* Modale confirmation suppression */}
+      {confirmDelete && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, backdropFilter:"blur(2px)" }}>
+          <div style={{ background:"white", borderRadius:14, padding:"28px 32px", maxWidth:420, width:"90%", boxShadow:"0 20px 60px rgba(0,0,0,0.25)", textAlign:"center" }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>🗑️</div>
+            <h2 style={{ margin:"0 0 8px", fontSize:18, color:"#1e3a5f", fontWeight:700 }}>Supprimer la commune ?</h2>
+            <p style={{ color:"#64748b", fontSize:14, margin:"0 0 24px", lineHeight:1.5 }}>
+              Vous allez supprimer <strong style={{ color:"#1e3a5f" }}>{confirmDelete}</strong> et tous ses bâtiments. Cette action est irréversible.
+            </p>
+            <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+              <button onClick={()=>setConfirmDelete(null)} style={{ padding:"10px 24px", borderRadius:8, border:"1px solid #e2e8f0", background:"white", color:"#475569", fontWeight:600, fontSize:14, cursor:"pointer" }}>Annuler</button>
+              <button onClick={()=>deleteCommune(confirmDelete)} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#ef4444", color:"white", fontWeight:700, fontSize:14, cursor:"pointer" }}>Oui, supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 
-function MainApp({ user, commune, onBack, onLogout }) {
-  const [batiments, setBatimentsRaw] = useState([]);
+function MainApp({ user, commune, batiments, setBatiments, onBack, onLogout }) {
   const [newBatiment, setNewBatiment] = useState("");
   const [view, setView] = useState("table");
   const [search, setSearch] = useState("");
@@ -219,41 +255,41 @@ function MainApp({ user, commune, onBack, onLogout }) {
   const [addMissionOpen, setAddMissionOpen] = useState({});
   const historyRef = useRef([]);
 
-  const setBatiments = useCallback((updater) => {
-    setBatimentsRaw((prev) => {
+  const setBatimentsWithHistory = useCallback((updater) => {
+    setBatiments((prev) => {
       historyRef.current = [...historyRef.current.slice(-MAX_HISTORY + 1), prev];
       return typeof updater === "function" ? updater(prev) : updater;
     });
-  }, []);
+  }, [setBatimentsWithHistory]);
 
   const undo = () => {
     if (!historyRef.current.length) return;
     const prev = historyRef.current[historyRef.current.length - 1];
     historyRef.current = historyRef.current.slice(0, -1);
-    setBatimentsRaw(prev);
+    setBatiments(prev);
   };
   const canUndo = historyRef.current.length > 0;
 
   const updateMission = useCallback((batId, mCode, field, value) => {
-    setBatiments((prev) =>
+    setBatimentsWithHistory((prev) =>
       prev.map((b) => b.id === batId ? { ...b, missions: b.missions.map((m) => m.code === mCode ? { ...m, [field]: value } : m) } : b)
     );
-  }, [setBatiments]);
+  }, [setBatimentsWithHistory]);
 
   const removeMission = (batId, mCode) => {
-    setBatiments((prev) => prev.map((b) => b.id === batId ? { ...b, missions: b.missions.filter((m) => m.code !== mCode) } : b));
+    setBatimentsWithHistory((prev) => prev.map((b) => b.id === batId ? { ...b, missions: b.missions.filter((m) => m.code !== mCode) } : b));
   };
 
   const addMissionToBat = (batId, mCode) => {
     const def = MISSIONS.find((m) => m.code === mCode);
     if (!def) return;
-    setBatiments((prev) => prev.map((b) => b.id === batId ? { ...b, missions: [...b.missions, createEmptyMission(def)] } : b));
+    setBatimentsWithHistory((prev) => prev.map((b) => b.id === batId ? { ...b, missions: [...b.missions, createEmptyMission(def)] } : b));
     setAddMissionOpen((o) => ({ ...o, [batId]: false }));
   };
 
-  const toggleExpand = (batId) => setBatimentsRaw((prev) => prev.map((b) => b.id === batId ? { ...b, expanded: !b.expanded } : b));
-  const addBatiment = () => { if (newBatiment.trim()) { setBatiments((prev) => [...prev, createBatiment(newBatiment.trim())]); setNewBatiment(""); } };
-  const removeBatiment = (batId) => { setBatiments((prev) => prev.filter((b) => b.id !== batId)); setConfirmDelete(null); };
+  const toggleExpand = (batId) => setBatiments((prev) => prev.map((b) => b.id === batId ? { ...b, expanded: !b.expanded } : b));
+  const addBatiment = () => { if (newBatiment.trim()) { setBatimentsWithHistory((prev) => [...prev, createBatiment(newBatiment.trim())]); setNewBatiment(""); } };
+  const removeBatiment = (batId) => { setBatimentsWithHistory((prev) => prev.filter((b) => b.id !== batId)); setConfirmDelete(null); };
 
   const totalPrevu = batiments.reduce((s, b) => s + b.missions.reduce((ss, m) => ss + (parseFloat(m.unPrevu) || 0), 0), 0);
   const totalPropose = batiments.reduce((s, b) => s + b.missions.reduce((ss, m) => ss + (parseFloat(m.unPropose) || 0), 0), 0);
@@ -326,11 +362,11 @@ function MainApp({ user, commune, onBack, onLogout }) {
               <span style={{ fontSize:12, color:"#94a3b8", whiteSpace:"nowrap" }}>{filteredBatiments.length} résultat{filteredBatiments.length!==1?"s":""}</span>
             </>)}
           </div>
-          <button onClick={()=>setBatimentsRaw((prev)=>prev.map((b)=>({...b,expanded:true})))}
+          <button onClick={()=>setBatiments((prev)=>prev.map((b)=>({...b,expanded:true})))}
             style={{ display:"flex", alignItems:"center", gap:6, padding:"10px 18px", borderRadius:10, border:"1px solid #e2e8f0", background:"white", color:"#1e3a5f", fontWeight:600, fontSize:13, cursor:"pointer", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", whiteSpace:"nowrap" }}>
             ⊞ Tout déployer
           </button>
-          <button onClick={()=>setBatimentsRaw((prev)=>prev.map((b)=>({...b,expanded:false})))}
+          <button onClick={()=>setBatiments((prev)=>prev.map((b)=>({...b,expanded:false})))}
             style={{ display:"flex", alignItems:"center", gap:6, padding:"10px 18px", borderRadius:10, border:"1px solid #e2e8f0", background:"white", color:"#1e3a5f", fontWeight:600, fontSize:13, cursor:"pointer", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", whiteSpace:"nowrap" }}>
             ⊟ Tout réduire
           </button>
@@ -521,8 +557,25 @@ function MainApp({ user, commune, onBack, onLogout }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [commune, setCommune] = useState(null);
+  const [communes, setCommunes] = useState(COMMUNES_INITIALES);
+  const [allBatiments, setAllBatiments] = useState({});
+
+  const getBatiments = (c) => allBatiments[c] || [];
+  const setBatiments = (c, updater) => {
+    setAllBatiments(prev => ({
+      ...prev,
+      [c]: typeof updater === "function" ? updater(prev[c] || []) : updater
+    }));
+  };
 
   if (!user) return <LoginPage onLogin={setUser} />;
-  if (!commune) return <CommunePage user={user} onSelectCommune={setCommune} onLogout={()=>setUser(null)} />;
-  return <MainApp user={user} commune={commune} onBack={()=>setCommune(null)} onLogout={()=>{ setUser(null); setCommune(null); }} />;
+  if (!commune) return <CommunePage user={user} communes={communes} setCommunes={setCommunes} onSelectCommune={setCommune} onLogout={()=>setUser(null)} />;
+  return <MainApp
+    user={user}
+    commune={commune}
+    batiments={getBatiments(commune)}
+    setBatiments={(updater) => setBatiments(commune, updater)}
+    onBack={()=>setCommune(null)}
+    onLogout={()=>{ setUser(null); setCommune(null); }}
+  />;
 }
