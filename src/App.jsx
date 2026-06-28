@@ -713,14 +713,18 @@ export default function App() {
         envoyerNotification(user, [...actionsLog.current]);
         actionsLog.current = [];
       }
-    }, 1 * 60 * 1000); // 5 minutes
+    }, 5 * 60 * 1000); // 5 minutes
   };
 
   const handleLogout = () => {
+    // Envoyer le mail si des actions sont en attente
+    if (actionsLog.current.length > 0) {
+      envoyerNotification(user, [...actionsLog.current]);
+      actionsLog.current = [];
+    }
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     setUser(null);
     setCommune(null);
-    if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
-    actionsLog.current = [];
   };
 
   if (!user) return <LoginPage onLogin={setUser} />;
