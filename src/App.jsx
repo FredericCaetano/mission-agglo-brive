@@ -713,7 +713,7 @@ export default function App() {
         envoyerNotification(user, [...actionsLog.current]);
         actionsLog.current = [];
       }
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 1 * 60 * 1000); // 5 minutes
   };
 
   const handleLogout = () => {
