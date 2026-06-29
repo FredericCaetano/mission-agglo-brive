@@ -260,7 +260,7 @@ function LoginPage({ onLogin }) {
           <h2 style={{ margin:"0 0 24px", fontSize:17, color:"#1e3a5f", fontWeight:700, textAlign:"center" }}>Connexion</h2>
           <div style={{ marginBottom:16 }}>
             <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:6, textTransform:"uppercase", letterSpacing:0.5 }}>Code salarié</label>
-            <input type="text" value={code} onChange={(e)=>setCode(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&handleLogin()} placeholder="Ex : 11630"
+            <input type="text" value={code} onChange={(e)=>setCode(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&handleLogin()} placeholder="Ex : 12345"
               style={{ width:"100%", padding:"11px 14px", borderRadius:8, border:"1.5px solid #e2e8f0", fontSize:15, outline:"none", boxSizing:"border-box" }}
               onFocus={(e)=>e.target.style.borderColor="#2563eb"} onBlur={(e)=>e.target.style.borderColor="#e2e8f0"} />
           </div>
@@ -519,7 +519,37 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
           <div style={{ background:"white", borderRadius:16, width:"100%", maxWidth:900, boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
             <div style={{ background:"linear-gradient(135deg,#1e3a5f,#2563eb)", borderRadius:"16px 16px 0 0", padding:"20px 24px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <h2 style={{ margin:0, color:"white", fontSize:18, fontWeight:700 }}>📊 Récapitulatif global des missions réalisées</h2>
-              <button onClick={()=>setShowRecap(false)} style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontWeight:700, fontSize:14 }}>✕ Fermer</button>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={()=>{
+                  const printContent = document.getElementById('recap-print-area');
+                  const w = window.open('', '_blank');
+                  w.document.write(`
+                    <html><head><title>Récapitulatif Mission Agglo Brive 2026</title>
+                    <style>
+                      body { font-family: sans-serif; padding: 20px; font-size: 12px; }
+                      h1 { color: #1e3a5f; font-size: 16px; margin-bottom: 4px; }
+                      h2 { color: #1e3a5f; font-size: 13px; margin: 16px 0 6px; background:#f1f5f9; padding: 6px 10px; border-radius:4px; }
+                      table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+                      th { background: #1e3a5f; color: white; padding: 6px 8px; text-align: left; font-size: 11px; }
+                      td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; }
+                      tr:nth-child(even) { background: #f8fafc; }
+                      .badge { background: #dbeafe; padding: 1px 6px; border-radius: 4px; font-weight: bold; color: #1e3a5f; }
+                      @media print { body { padding: 10px; } }
+                    </style></head><body>
+                    <h1>Mission Agglo Brive 2026 — Récapitulatif des missions réalisées</h1>
+                    <p style="color:#64748b;font-size:11px">Imprimé le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'})}</p>
+                    ${printContent ? printContent.innerHTML : ''}
+                    </body></html>
+                  `);
+                  w.document.close();
+                  w.focus();
+                  setTimeout(()=>{ w.print(); w.close(); }, 500);
+                }}
+                style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontWeight:700, fontSize:13 }}>
+                  🖨️ Imprimer
+                </button>
+                <button onClick={()=>setShowRecap(false)} style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontWeight:700, fontSize:14 }}>✕ Fermer</button>
+              </div>
             </div>
             <div style={{ padding:"16px 24px", borderBottom:"1px solid #e2e8f0", display:"flex", gap:8 }}>
               {["par_commune","tableau"].map(t=>(
@@ -530,7 +560,7 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
               ))}
               <span style={{ marginLeft:"auto", color:"#64748b", fontSize:13, alignSelf:"center" }}>{recapData.length} mission{recapData.length!==1?"s":""} réalisée{recapData.length!==1?"s":""}</span>
             </div>
-            <div style={{ padding:"16px 24px", maxHeight:"65vh", overflowY:"auto" }}>
+            <div id="recap-print-area" style={{ padding:"16px 24px", maxHeight:"65vh", overflowY:"auto" }}>
               {loadingRecap ? (
                 <div style={{ textAlign:"center", padding:48, color:"#64748b" }}>⏳ Chargement...</div>
               ) : recapData.length === 0 ? (
