@@ -80,10 +80,18 @@ async function fetchGlobalStats() {
 // Récapitulatif global des missions réalisées
 async function fetchRecapMissions() {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/missions?select=id,code,label,realise,intervenant,date_intervention,batiments(id,nom,communes(id,nom))&realise=eq.true&order=batiments(communes(nom)).asc`,
+    `${SUPABASE_URL}/rest/v1/missions?select=id,code,label,realise,intervenant,date_intervention,batiment_id,batiments!inner(id,nom,commune_id,communes!inner(id,nom))&realise=eq.true`,
     { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
   );
-  return res.json();
+  if (!res.ok) return [];
+  const data = await res.json();
+  // Sort by commune name then batiment name
+  return data.sort((a,b) => {
+    const ca = a.batiments?.communes?.nom || "";
+    const cb = b.batiments?.communes?.nom || "";
+    if (ca !== cb) return ca.localeCompare(cb, "fr");
+    return (a.batiments?.nom||"").localeCompare(b.batiments?.nom||"", "fr");
+  });
 }
 
 // Stats missions par commune
@@ -273,8 +281,9 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
   const [echeances, setEcheances] = useState([]);
   const [globalStats, setGlobalStats] = useState({ totalBatiments: 0, missionsRealisees: 0, totalMissions: 0 });
   const [communeStats, setCommuneStats] = useState({});
-  const [filtreCommune, setFiltreCommune] = useState("toutes"); // toutes | terminees | en_cours
+  const [filtreCommune, setFiltreCommune] = useState("toutes");
   const [filtreIntervenant, setFiltreIntervenant] = useState("");
+  const [intervenants, setIntervenants] = useState([]);
   const [showRecap, setShowRecap] = useState(false);
   const [recapTab, setRecapTab] = useState("par_commune"); // par_commune | tableau
   const [recapData, setRecapData] = useState([]);
@@ -282,15 +291,15 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchCommunes(), fetchEcheances(), fetchGlobalStats(), fetchCommuneStats()])
-      .then(([comData, echData, statsData, statsCommune]) => {
+    Promise.all([fetchCommunes(), fetchEcheances(), fetchGlobalStats(), fetchCommuneStats(), fetchIntervenants()])
+      .then(([comData, echData, statsData, statsCommune, ivsData]) => {
         setCommunes(comData);
         setEcheances(echData || []);
         setGlobalStats(statsData || { totalBatiments: 0, missionsRealisees: 0, totalMissions: 0 });
-        // Transform array into object keyed by commune_id
         const statsMap = {};
         (statsCommune || []).forEach(s => { statsMap[s.commune_id] = s; });
         setCommuneStats(statsMap);
+        setIntervenants(ivsData || []);
         setLoading(false);
       })
       .catch(()=>setLoading(false));
@@ -376,12 +385,13 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
               {f==="toutes"?"🏘️ Toutes":f==="en_cours"?"🔄 En cours":"✅ Terminées"}
             </button>
           ))}
-          <div style={{ display:"flex", alignItems:"center", gap:8, background:"white", borderRadius:8, padding:"6px 12px", border:"1px solid #e2e8f0", flex:"1 1 180px", maxWidth:260 }}>
-            <span style={{ color:"#94a3b8" }}>👤</span>
-            <input type="text" value={filtreIntervenant} onChange={e=>setFiltreIntervenant(e.target.value)} placeholder="Filtrer par intervenant..."
-              style={{ border:"none", outline:"none", fontSize:12, color:"#1e3a5f", background:"transparent", width:"100%" }}/>
-            {filtreIntervenant && <button onClick={()=>setFiltreIntervenant("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:14 }}>✕</button>}
-          </div>
+          <select value={filtreIntervenant} onChange={e=>setFiltreIntervenant(e.target.value)}
+            style={{ padding:"8px 12px", borderRadius:8, border:"1px solid #e2e8f0", fontSize:12, color:"#1e3a5f", background:"white", cursor:"pointer", maxWidth:220 }}>
+            <option value="">👤 Tous les intervenants</option>
+            {intervenants.map(iv=>(
+              <option key={iv.id} value={`${iv.prenom} ${iv.nom}`}>{iv.prenom} {iv.nom}</option>
+            ))}
+          </select>
           <button onClick={async()=>{
             setShowRecap(true); setLoadingRecap(true);
             const data = await fetchRecapMissions();
@@ -401,10 +411,7 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
               const total = Number(stats?.total_missions || 0);
               const realise = Number(stats?.missions_realisees || 0);
               if (filtreCommune === "terminees" && (total === 0 || realise < total)) return false;
-              if (filtreCommune === "en_cours" && realise === total && total > 0) return false;
-              if (filtreIntervenant.trim()) {
-                // On ne peut pas filtrer par intervenant ici sans les missions — on laisse passer toutes
-              }
+              if (filtreCommune === "en_cours" && (realise === 0 || (realise === total && total > 0))) return false;
               return true;
             }).map((commune) => (
               <div key={commune.id} style={{ position:"relative" }}>
@@ -713,10 +720,10 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
     const total = b.missions.length;
     const realise = b.missions.filter(m => m.realise).length;
     if (filtreBat === "termines" && (total === 0 || realise < total)) return false;
-    if (filtreBat === "en_cours" && realise === total && total > 0) return false;
+    if (filtreBat === "en_cours" && (realise === 0 || (realise === total && total > 0))) return false;
     // Filtre intervenant
     if (filtreIntervenantBat.trim()) {
-      const hasIntervenant = b.missions.some(m => m.intervenant?.toLowerCase().includes(filtreIntervenantBat.trim().toLowerCase()));
+      const hasIntervenant = b.missions.some(m => m.intervenant === filtreIntervenantBat.trim());
       if (!hasIntervenant) return false;
     }
     return true;
@@ -779,12 +786,13 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
               {f==="tous"?"🏢 Tous":f==="en_cours"?"🔄 En cours":"✅ Terminés"}
             </button>
           ))}
-          <div style={{ display:"flex", alignItems:"center", gap:8, background:"white", borderRadius:8, padding:"6px 12px", border:"1px solid #e2e8f0", flex:"1 1 160px", maxWidth:240 }}>
-            <span style={{ color:"#94a3b8" }}>👤</span>
-            <input type="text" value={filtreIntervenantBat} onChange={e=>setFiltreIntervenantBat(e.target.value)} placeholder="Filtrer par intervenant..."
-              style={{ border:"none", outline:"none", fontSize:12, color:"#1e3a5f", background:"transparent", width:"100%" }}/>
-            {filtreIntervenantBat && <button onClick={()=>setFiltreIntervenantBat("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:14 }}>✕</button>}
-          </div>
+          <select value={filtreIntervenantBat} onChange={e=>setFiltreIntervenantBat(e.target.value)}
+            style={{ padding:"7px 12px", borderRadius:8, border:"1px solid #e2e8f0", fontSize:12, color:"#1e3a5f", background:"white", cursor:"pointer", maxWidth:220 }}>
+            <option value="">👤 Tous les intervenants</option>
+            {intervenants.map(iv=>(
+              <option key={iv.id} value={`${iv.prenom} ${iv.nom}`}>{iv.prenom} {iv.nom}</option>
+            ))}
+          </select>
         </div>
 
         {loading ? <div style={{ textAlign:"center", padding:48, color:"#64748b" }}>⏳ Chargement...</div> : view === "table" ? (
