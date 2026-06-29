@@ -94,6 +94,21 @@ async function fetchRecapMissions() {
   });
 }
 
+// Communes filtrées par intervenant
+async function fetchCommunesByIntervenant(intervenant) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/rpc/get_communes_by_intervenant`,
+    {
+      method: "POST",
+      headers: { ...H, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_intervenant: intervenant })
+    }
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.map(d => d.commune_id);
+}
+
 // Stats missions par commune
 async function fetchCommuneStats() {
   return api("/rest/v1/rpc/get_commune_mission_stats", "POST", {});
@@ -284,10 +299,19 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
   const [filtreCommune, setFiltreCommune] = useState("toutes");
   const [filtreIntervenant, setFiltreIntervenant] = useState("");
   const [intervenants, setIntervenants] = useState([]);
+  const [communesIntervenantIds, setCommunesIntervenantIds] = useState(null); // null = pas de filtre
   const [showRecap, setShowRecap] = useState(false);
   const [recapTab, setRecapTab] = useState("par_commune"); // par_commune | tableau
   const [recapData, setRecapData] = useState([]);
   const [loadingRecap, setLoadingRecap] = useState(false);
+
+  useEffect(() => {
+    if (filtreIntervenant) {
+      fetchCommunesByIntervenant(filtreIntervenant).then(ids => setCommunesIntervenantIds(ids));
+    } else {
+      setCommunesIntervenantIds(null);
+    }
+  }, [filtreIntervenant]);
 
   useEffect(() => {
     setLoading(true);
@@ -412,6 +436,7 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
               const realise = Number(stats?.missions_realisees || 0);
               if (filtreCommune === "terminees" && (total === 0 || realise < total)) return false;
               if (filtreCommune === "en_cours" && (realise === 0 || (realise === total && total > 0))) return false;
+              if (communesIntervenantIds !== null && !communesIntervenantIds.includes(commune.id)) return false;
               return true;
             }).map((commune) => (
               <div key={commune.id} style={{ position:"relative" }}>
