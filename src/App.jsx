@@ -156,7 +156,7 @@ function LoginPage({ onLogin }) {
           <h2 style={{ margin:"0 0 24px", fontSize:17, color:"#1e3a5f", fontWeight:700, textAlign:"center" }}>Connexion</h2>
           <div style={{ marginBottom:16 }}>
             <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:6, textTransform:"uppercase", letterSpacing:0.5 }}>Code salarié</label>
-            <input type="text" value={code} onChange={(e)=>setCode(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&handleLogin()} placeholder="Ex :12345"
+            <input type="text" value={code} onChange={(e)=>setCode(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&handleLogin()} placeholder="Ex : 11630"
               style={{ width:"100%", padding:"11px 14px", borderRadius:8, border:"1.5px solid #e2e8f0", fontSize:15, outline:"none", boxSizing:"border-box" }}
               onFocus={(e)=>e.target.style.borderColor="#2563eb"} onBlur={(e)=>e.target.style.borderColor="#e2e8f0"} />
           </div>
@@ -188,7 +188,6 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
   const [communes, setCommunes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newCommune, setNewCommune] = useState("");
-  const [search, setSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(null);
 
   useEffect(() => {
@@ -219,7 +218,7 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
     } catch(e) { alert("Erreur lors de la suppression : " + e.message); }
   };
 
-  const filtered = search.trim() ? communes.filter(c => c.nom.toLowerCase().includes(search.trim().toLowerCase())) : communes;
+
 
   return (
     <div style={{ minHeight:"100vh", background:"#f8fafc", fontFamily:"'Segoe UI', system-ui, sans-serif" }}>
@@ -247,14 +246,8 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
         {loading ? (
           <div style={{ textAlign:"center", padding:48, color:"#64748b" }}>⏳ Chargement des communes...</div>
         ) : (<>
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:24, background:"white", borderRadius:10, padding:"10px 16px", border:"1px solid #e2e8f0", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", maxWidth:500 }}>
-            <span style={{ fontSize:18, color:"#94a3b8" }}>🔍</span>
-            <input type="text" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Rechercher une commune..."
-              style={{ flex:1, border:"none", outline:"none", fontSize:14, color:"#1e3a5f", background:"transparent" }} />
-            {search && <button onClick={()=>setSearch("")} style={{ background:"#f1f5f9", border:"none", borderRadius:6, padding:"4px 10px", cursor:"pointer", color:"#64748b", fontSize:12, fontWeight:600 }}>✕</button>}
-          </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:16, marginBottom:32 }}>
-            {filtered.map((commune) => (
+            {communes.map((commune) => (
               <div key={commune.id} style={{ position:"relative" }}>
                 <button onClick={()=>onSelectCommune(commune)}
                   style={{ width:"100%", background:"white", border:"1px solid #e2e8f0", borderRadius:12, padding:"20px 16px 16px", cursor:"pointer", textAlign:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", transition:"all 0.2s", display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}
