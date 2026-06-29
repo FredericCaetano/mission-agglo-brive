@@ -77,6 +77,15 @@ async function fetchGlobalStats() {
   };
 }
 
+// Récapitulatif global des missions réalisées
+async function fetchRecapMissions() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/missions?select=id,code,label,realise,intervenant,date_intervention,batiments(id,nom,communes(id,nom))&realise=eq.true&order=batiments(communes(nom)).asc`,
+    { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+  );
+  return res.json();
+}
+
 // Stats missions par commune
 async function fetchCommuneStats() {
   return api("/rest/v1/rpc/get_commune_mission_stats", "POST", {});
@@ -264,6 +273,12 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
   const [echeances, setEcheances] = useState([]);
   const [globalStats, setGlobalStats] = useState({ totalBatiments: 0, missionsRealisees: 0, totalMissions: 0 });
   const [communeStats, setCommuneStats] = useState({});
+  const [filtreCommune, setFiltreCommune] = useState("toutes"); // toutes | terminees | en_cours
+  const [filtreIntervenant, setFiltreIntervenant] = useState("");
+  const [showRecap, setShowRecap] = useState(false);
+  const [recapTab, setRecapTab] = useState("par_commune"); // par_commune | tableau
+  const [recapData, setRecapData] = useState([]);
+  const [loadingRecap, setLoadingRecap] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -353,11 +368,45 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
             </div>
           </div>
         </div>
+        {/* Boutons filtre communes */}
+        <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
+          {["toutes","en_cours","terminees"].map(f => (
+            <button key={f} onClick={()=>setFiltreCommune(f)}
+              style={{ padding:"8px 16px", borderRadius:8, border:`1.5px solid ${filtreCommune===f?"#2563eb":"#e2e8f0"}`, background:filtreCommune===f?"#2563eb":"white", color:filtreCommune===f?"white":"#475569", fontWeight:600, fontSize:12, cursor:"pointer" }}>
+              {f==="toutes"?"🏘️ Toutes":f==="en_cours"?"🔄 En cours":"✅ Terminées"}
+            </button>
+          ))}
+          <div style={{ display:"flex", alignItems:"center", gap:8, background:"white", borderRadius:8, padding:"6px 12px", border:"1px solid #e2e8f0", flex:"1 1 180px", maxWidth:260 }}>
+            <span style={{ color:"#94a3b8" }}>👤</span>
+            <input type="text" value={filtreIntervenant} onChange={e=>setFiltreIntervenant(e.target.value)} placeholder="Filtrer par intervenant..."
+              style={{ border:"none", outline:"none", fontSize:12, color:"#1e3a5f", background:"transparent", width:"100%" }}/>
+            {filtreIntervenant && <button onClick={()=>setFiltreIntervenant("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:14 }}>✕</button>}
+          </div>
+          <button onClick={async()=>{
+            setShowRecap(true); setLoadingRecap(true);
+            const data = await fetchRecapMissions();
+            setRecapData(data || []);
+            setLoadingRecap(false);
+          }} style={{ padding:"8px 16px", borderRadius:8, border:"1.5px solid #059669", background:"#d1fae5", color:"#059669", fontWeight:700, fontSize:12, cursor:"pointer", whiteSpace:"nowrap" }}>
+            📊 Récapitulatif global
+          </button>
+        </div>
+
         {loading ? (
           <div style={{ textAlign:"center", padding:48, color:"#64748b" }}>⏳ Chargement des communes...</div>
         ) : (<>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:16, marginBottom:32 }}>
-            {communes.map((commune) => (
+            {communes.filter(commune => {
+              const stats = communeStats[commune.id];
+              const total = Number(stats?.total_missions || 0);
+              const realise = Number(stats?.missions_realisees || 0);
+              if (filtreCommune === "terminees" && (total === 0 || realise < total)) return false;
+              if (filtreCommune === "en_cours" && realise === total && total > 0) return false;
+              if (filtreIntervenant.trim()) {
+                // On ne peut pas filtrer par intervenant ici sans les missions — on laisse passer toutes
+              }
+              return true;
+            }).map((commune) => (
               <div key={commune.id} style={{ position:"relative" }}>
                 {(() => {
                   const communeAlerts = echeances.filter(e => e.batiments?.commune_id === commune.id).length;
@@ -430,6 +479,96 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
           </div>
         </div>
       )}
+
+      {/* MODAL RÉCAPITULATIF GLOBAL */}
+      {showRecap && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:1001, backdropFilter:"blur(2px)", overflowY:"auto", padding:"24px 16px" }}>
+          <div style={{ background:"white", borderRadius:16, width:"100%", maxWidth:900, boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
+            <div style={{ background:"linear-gradient(135deg,#1e3a5f,#2563eb)", borderRadius:"16px 16px 0 0", padding:"20px 24px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <h2 style={{ margin:0, color:"white", fontSize:18, fontWeight:700 }}>📊 Récapitulatif global des missions réalisées</h2>
+              <button onClick={()=>setShowRecap(false)} style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontWeight:700, fontSize:14 }}>✕ Fermer</button>
+            </div>
+            <div style={{ padding:"16px 24px", borderBottom:"1px solid #e2e8f0", display:"flex", gap:8 }}>
+              {["par_commune","tableau"].map(t=>(
+                <button key={t} onClick={()=>setRecapTab(t)}
+                  style={{ padding:"8px 18px", borderRadius:8, border:`1.5px solid ${recapTab===t?"#2563eb":"#e2e8f0"}`, background:recapTab===t?"#2563eb":"white", color:recapTab===t?"white":"#475569", fontWeight:600, fontSize:13, cursor:"pointer" }}>
+                  {t==="par_commune"?"🏘️ Par commune":"📋 Tableau détaillé"}
+                </button>
+              ))}
+              <span style={{ marginLeft:"auto", color:"#64748b", fontSize:13, alignSelf:"center" }}>{recapData.length} mission{recapData.length!==1?"s":""} réalisée{recapData.length!==1?"s":""}</span>
+            </div>
+            <div style={{ padding:"16px 24px", maxHeight:"65vh", overflowY:"auto" }}>
+              {loadingRecap ? (
+                <div style={{ textAlign:"center", padding:48, color:"#64748b" }}>⏳ Chargement...</div>
+              ) : recapData.length === 0 ? (
+                <div style={{ textAlign:"center", padding:48, color:"#94a3b8" }}>Aucune mission réalisée pour l'instant.</div>
+              ) : recapTab === "par_commune" ? (
+                // Grouper par commune
+                (() => {
+                  const grouped = {};
+                  recapData.forEach(m => {
+                    const cnom = m.batiments?.communes?.nom || "Inconnue";
+                    if (!grouped[cnom]) grouped[cnom] = [];
+                    grouped[cnom].push(m);
+                  });
+                  return Object.entries(grouped).sort(([a],[b])=>a.localeCompare(b,"fr")).map(([cnom, missions]) => (
+                    <div key={cnom} style={{ marginBottom:20 }}>
+                      <div style={{ background:"#1e3a5f", color:"white", padding:"8px 16px", borderRadius:"8px 8px 0 0", fontWeight:700, fontSize:14, display:"flex", justifyContent:"space-between" }}>
+                        <span>🏘️ {cnom}</span>
+                        <span style={{ color:"#93c5fd", fontSize:12 }}>{missions.length} mission{missions.length!==1?"s":""}</span>
+                      </div>
+                      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                        <thead><tr style={{ background:"#f1f5f9" }}>
+                          <th style={{ padding:"8px 12px", textAlign:"left", color:"#475569", fontWeight:600, borderBottom:"1px solid #e2e8f0" }}>Bâtiment</th>
+                          <th style={{ padding:"8px 12px", textAlign:"left", color:"#475569", fontWeight:600, borderBottom:"1px solid #e2e8f0" }}>Code</th>
+                          <th style={{ padding:"8px 12px", textAlign:"left", color:"#475569", fontWeight:600, borderBottom:"1px solid #e2e8f0" }}>Mission</th>
+                          <th style={{ padding:"8px 12px", textAlign:"left", color:"#475569", fontWeight:600, borderBottom:"1px solid #e2e8f0" }}>Intervenant</th>
+                          <th style={{ padding:"8px 12px", textAlign:"left", color:"#475569", fontWeight:600, borderBottom:"1px solid #e2e8f0" }}>Date</th>
+                        </tr></thead>
+                        <tbody>
+                          {missions.map((m,i) => (
+                            <tr key={m.id} style={{ background:i%2===0?"#f8fafc":"white" }}>
+                              <td style={{ padding:"7px 12px", borderBottom:"1px solid #f1f5f9", color:"#1e3a5f", fontWeight:600 }}>{m.batiments?.nom||"—"}</td>
+                              <td style={{ padding:"7px 12px", borderBottom:"1px solid #f1f5f9" }}><span style={{ background:"#dbeafe", padding:"2px 8px", borderRadius:4, fontSize:11, fontWeight:700, color:"#1e3a5f" }}>{m.code}</span></td>
+                              <td style={{ padding:"7px 12px", borderBottom:"1px solid #f1f5f9", color:"#475569" }}>{m.label}</td>
+                              <td style={{ padding:"7px 12px", borderBottom:"1px solid #f1f5f9", color:"#475569" }}>{m.intervenant||"—"}</td>
+                              <td style={{ padding:"7px 12px", borderBottom:"1px solid #f1f5f9", color:"#475569" }}>{m.date_intervention?new Date(m.date_intervention).toLocaleDateString("fr-FR"):"—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ));
+                })()
+              ) : (
+                // Tableau détaillé
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                  <thead><tr style={{ background:"#1e3a5f", color:"white" }}>
+                    <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:600 }}>Commune</th>
+                    <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:600 }}>Bâtiment</th>
+                    <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:600 }}>Code</th>
+                    <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:600 }}>Mission</th>
+                    <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:600 }}>Intervenant</th>
+                    <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:600 }}>Date</th>
+                  </tr></thead>
+                  <tbody>
+                    {recapData.map((m,i) => (
+                      <tr key={m.id} style={{ background:i%2===0?"#f8fafc":"white" }}>
+                        <td style={{ padding:"7px 12px", borderBottom:"1px solid #f1f5f9", color:"#1e3a5f", fontWeight:600 }}>{m.batiments?.communes?.nom||"—"}</td>
+                        <td style={{ padding:"7px 12px", borderBottom:"1px solid #f1f5f9", color:"#475569" }}>{m.batiments?.nom||"—"}</td>
+                        <td style={{ padding:"7px 12px", borderBottom:"1px solid #f1f5f9" }}><span style={{ background:"#dbeafe", padding:"2px 8px", borderRadius:4, fontSize:11, fontWeight:700, color:"#1e3a5f" }}>{m.code}</span></td>
+                        <td style={{ padding:"7px 12px", borderBottom:"1px solid #f1f5f9", color:"#475569" }}>{m.label}</td>
+                        <td style={{ padding:"7px 12px", borderBottom:"1px solid #f1f5f9", color:"#475569" }}>{m.intervenant||"—"}</td>
+                        <td style={{ padding:"7px 12px", borderBottom:"1px solid #f1f5f9", color:"#475569" }}>{m.date_intervention?new Date(m.date_intervention).toLocaleDateString("fr-FR"):"—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -448,6 +587,8 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
   const [addMissionOpen, setAddMissionOpen] = useState({});
   const [editingBatId, setEditingBatId] = useState(null);
   const [intervenants, setIntervenants] = useState([]);
+  const [filtreBat, setFiltreBat] = useState("tous"); // tous | termines | en_cours
+  const [filtreIntervenantBat, setFiltreIntervenantBat] = useState("");
   const [echeances, setEcheances] = useState([]); // ids de missions en alerte
   const [missionPicker, setMissionPicker] = useState(null);
   const [pickerSelections, setPickerSelections] = useState([]);
@@ -565,7 +706,21 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
   const totalPrevu = batiments.reduce((s,b) => s + b.missions.reduce((ss,m) => ss + (parseFloat(m.unPrevu)||0), 0), 0);
   const totalPropose = batiments.reduce((s,b) => s + b.missions.reduce((ss,m) => ss + (parseFloat(m.unPropose)||0), 0), 0);
   const totalRealise = batiments.reduce((s,b) => s + b.missions.filter(m => m.realise).length, 0);
-  const filteredBatiments = search.trim() ? batiments.filter(b => b.nom.toLowerCase().includes(search.trim().toLowerCase())) : batiments;
+  const filteredBatiments = batiments.filter(b => {
+    // Filtre recherche nom
+    if (search.trim() && !b.nom.toLowerCase().includes(search.trim().toLowerCase())) return false;
+    // Filtre état
+    const total = b.missions.length;
+    const realise = b.missions.filter(m => m.realise).length;
+    if (filtreBat === "termines" && (total === 0 || realise < total)) return false;
+    if (filtreBat === "en_cours" && realise === total && total > 0) return false;
+    // Filtre intervenant
+    if (filtreIntervenantBat.trim()) {
+      const hasIntervenant = b.missions.some(m => m.intervenant?.toLowerCase().includes(filtreIntervenantBat.trim().toLowerCase()));
+      if (!hasIntervenant) return false;
+    }
+    return true;
+  });
 
   return (
     <div style={{ minHeight:"100vh", background:"#f8fafc", fontFamily:"'Segoe UI', system-ui, sans-serif" }}>
@@ -607,7 +762,7 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
         </div>
       </div>
       <div style={{ maxWidth:1400, margin:"0 auto", padding:"24px 32px" }}>
-        <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
+        <div style={{ display:"flex", gap:10, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
           <div style={{ display:"flex", alignItems:"center", gap:12, flex:"1 1 220px", background:"white", borderRadius:10, padding:"10px 16px", border:"1px solid #e2e8f0", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
             <span style={{ fontSize:18, color:"#94a3b8" }}>🔍</span>
             <input type="text" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Rechercher un bâtiment..."
@@ -616,6 +771,20 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
           </div>
           <button onClick={()=>batiments.forEach(b=>{ if(!b.expanded){toggleExpand(b.id,false);} })} style={{ display:"flex", alignItems:"center", gap:6, padding:"10px 18px", borderRadius:10, border:"1px solid #e2e8f0", background:"white", color:"#1e3a5f", fontWeight:600, fontSize:13, cursor:"pointer", whiteSpace:"nowrap" }}>⊞ Tout déployer</button>
           <button onClick={()=>batiments.forEach(b=>{ if(b.expanded){toggleExpand(b.id,true);} })} style={{ display:"flex", alignItems:"center", gap:6, padding:"10px 18px", borderRadius:10, border:"1px solid #e2e8f0", background:"white", color:"#1e3a5f", fontWeight:600, fontSize:13, cursor:"pointer", whiteSpace:"nowrap" }}>⊟ Tout réduire</button>
+        </div>
+        <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
+          {["tous","en_cours","termines"].map(f=>(
+            <button key={f} onClick={()=>setFiltreBat(f)}
+              style={{ padding:"7px 14px", borderRadius:8, border:`1.5px solid ${filtreBat===f?"#2563eb":"#e2e8f0"}`, background:filtreBat===f?"#2563eb":"white", color:filtreBat===f?"white":"#475569", fontWeight:600, fontSize:12, cursor:"pointer" }}>
+              {f==="tous"?"🏢 Tous":f==="en_cours"?"🔄 En cours":"✅ Terminés"}
+            </button>
+          ))}
+          <div style={{ display:"flex", alignItems:"center", gap:8, background:"white", borderRadius:8, padding:"6px 12px", border:"1px solid #e2e8f0", flex:"1 1 160px", maxWidth:240 }}>
+            <span style={{ color:"#94a3b8" }}>👤</span>
+            <input type="text" value={filtreIntervenantBat} onChange={e=>setFiltreIntervenantBat(e.target.value)} placeholder="Filtrer par intervenant..."
+              style={{ border:"none", outline:"none", fontSize:12, color:"#1e3a5f", background:"transparent", width:"100%" }}/>
+            {filtreIntervenantBat && <button onClick={()=>setFiltreIntervenantBat("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", fontSize:14 }}>✕</button>}
+          </div>
         </div>
 
         {loading ? <div style={{ textAlign:"center", padding:48, color:"#64748b" }}>⏳ Chargement...</div> : view === "table" ? (
