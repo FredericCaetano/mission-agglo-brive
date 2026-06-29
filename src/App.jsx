@@ -104,18 +104,35 @@ async function envoyerNotification(user, actions) {
 }
 
 const MISSIONS_DEF = [
-  { code: "HGAB", label: "VP Elec" },
-  { code: "HKDB", label: "GAZ ERP" },
-  { code: "HKDC", label: "GC ERP" },
-  { code: "HBBC", label: "TR SSI" },
-  { code: "HHCB", label: "ASCENSEUR" },
-  { code: "HHCE+HHCF", label: "ASCENSEUR QUINQUÉNAL" },
-  { code: "HHCH", label: "PORTES" },
+  { code: "HGAB",      label: "VP Électricité" },
+  { code: "HKDB",      label: "GAZ ERP" },
+  { code: "HKDC",      label: "GC ERP" },
+  { code: "HKCB",      label: "Efficacité énergétique" },
+  { code: "HGCA",      label: "Foudre" },
+  { code: "HBBC",      label: "Tri SSI" },
+  { code: "HHCB",      label: "Ascenseur" },
+  { code: "HHCE+HHCF", label: "Ascenseur 5 ans" },
+  { code: "HHCH",      label: "Porte et portail" },
+  { code: "HPAA",      label: "Aire de jeux" },
+  { code: "HPAC",      label: "Équipements sportifs" },
+  { code: "HHBB",      label: "Équipements scéniques" },
+  { code: "HJCA",      label: "Équipements sous pression" },
 ];
 
 const missionColors = {
-  "HGAB":"#dbeafe","HKDB":"#fef9c3","HKDC":"#fef9c3",
-  "HBBC":"#fef9c3","HHCB":"#dbeafe","HHCE+HHCF":"#dbeafe","HHCH":"#dbeafe",
+  "HGAB":      "#bbf7d0", // vert clair
+  "HKDB":      "#fef08a", // jaune
+  "HKDC":      "#fef08a", // jaune
+  "HKCB":      "#fef08a", // jaune
+  "HGCA":      "#bae6fd", // bleu ciel
+  "HBBC":      "#fecaca", // rouge clair
+  "HHCB":      "#e2e8f0", // gris clair
+  "HHCE+HHCF": "#e2e8f0", // gris clair
+  "HHCH":      "#bfdbfe", // bleu
+  "HPAA":      "#fed7aa", // orange clair
+  "HPAC":      "#fed7aa", // orange clair
+  "HHBB":      "#fbcfe8", // rose clair
+  "HJCA":      "#e2e8f0", // gris clair
 };
 
 const th = { padding:"10px 14px", textAlign:"left", fontWeight:600, fontSize:12, color:"#475569", borderBottom:"1px solid #e2e8f0", whiteSpace:"nowrap" };
