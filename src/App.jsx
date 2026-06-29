@@ -35,7 +35,7 @@ async function api(path, method = "GET", body = null) {
 
 // Communes
 async function fetchCommunes() {
-  return api("/rest/v1/communes?select=id,nom,batiments(count)&order=nom.asc");
+  return api("/rest/v1/communes?select=id,nom,batiments(count,missions(count,realise))&order=nom.asc");
 }
 async function addCommuneDB(nom) { return api("/rest/v1/communes", "POST", { nom }); }
 async function deleteCommuneDB(id) { return api(`/rest/v1/communes?id=eq.${id}`, "DELETE"); }
@@ -223,7 +223,7 @@ function LoginPage({ onLogin }) {
           <h2 style={{ margin:"0 0 24px", fontSize:17, color:"#1e3a5f", fontWeight:700, textAlign:"center" }}>Connexion</h2>
           <div style={{ marginBottom:16 }}>
             <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:6, textTransform:"uppercase", letterSpacing:0.5 }}>Code salarié</label>
-            <input type="text" value={code} onChange={(e)=>setCode(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&handleLogin()} placeholder="Ex : 12345"
+            <input type="text" value={code} onChange={(e)=>setCode(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&handleLogin()} placeholder="Ex : 11630"
               style={{ width:"100%", padding:"11px 14px", borderRadius:8, border:"1.5px solid #e2e8f0", fontSize:15, outline:"none", boxSizing:"border-box" }}
               onFocus={(e)=>e.target.style.borderColor="#2563eb"} onBlur={(e)=>e.target.style.borderColor="#e2e8f0"} />
           </div>
@@ -363,6 +363,23 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
                           ⚠️ {communeAlerts} échéance{communeAlerts > 1 ? "s" : ""} proche{communeAlerts > 1 ? "s" : ""}
                         </span>
                       )}
+                      {(() => {
+                        const totalMissions = commune.batiments?.reduce((s, b) => s + (b.missions?.length || 0), 0) || 0;
+                        const realisees = commune.batiments?.reduce((s, b) => s + (b.missions?.filter(m => m.realise)?.length || 0), 0) || 0;
+                        const pct = totalMissions > 0 ? Math.round(realisees / totalMissions * 100) : 0;
+                        return totalMissions > 0 ? (
+                          <div style={{ width:"100%", textAlign:"center" }}>
+                            <div style={{ fontSize:11, color:"#64748b", marginBottom:4 }}>
+                              <span style={{ fontWeight:700, color:"#059669" }}>{realisees}</span>
+                              <span style={{ color:"#94a3b8" }}> / {totalMissions} missions</span>
+                            </div>
+                            <div style={{ background:"#e2e8f0", borderRadius:10, height:6, width:"100%", overflow:"hidden" }}>
+                              <div style={{ background: pct === 100 ? "#059669" : pct > 50 ? "#2563eb" : "#f59e0b", height:"100%", width:`${pct}%`, borderRadius:10, transition:"width 0.3s" }} />
+                            </div>
+                            <div style={{ fontSize:10, color:"#94a3b8", marginTop:2 }}>{pct}%</div>
+                          </div>
+                        ) : null;
+                      })()}
                       <span style={{
                         background: commune.batiments?.[0]?.count > 0 ? "#dbeafe" : "#f1f5f9",
                         color: commune.batiments?.[0]?.count > 0 ? "#1e3a5f" : "#94a3b8",
