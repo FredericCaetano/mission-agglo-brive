@@ -35,7 +35,7 @@ async function api(path, method = "GET", body = null) {
 
 // Communes
 async function fetchCommunes() {
-  return api("/rest/v1/communes?select=id,nom,batiments(count,missions(count,realise))&order=nom.asc");
+  return api("/rest/v1/communes?select=id,nom,batiments(count)&order=nom.asc");
 }
 async function addCommuneDB(nom) { return api("/rest/v1/communes", "POST", { nom }); }
 async function deleteCommuneDB(id) { return api(`/rest/v1/communes?id=eq.${id}`, "DELETE"); }
