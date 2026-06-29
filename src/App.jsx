@@ -105,11 +105,11 @@ async function envoyerNotification(user, actions) {
 
 const MISSIONS_DEF = [
   { code: "HGAB",      label: "VP Électricité" },
-  { code: "HKDB",      label: "GAZ ERP" },
-  { code: "HKDC",      label: "GC ERP" },
+  { code: "HKDB",      label: "VP Gaz ERP" },
+  { code: "HKDC",      label: "Grande cuisine ERP" },
   { code: "HKCB",      label: "Efficacité énergétique" },
   { code: "HGCA",      label: "Foudre" },
-  { code: "HBBC",      label: "Tri SSI" },
+  { code: "HBBC",      label: "SSI 3 ans" },
   { code: "HHCB",      label: "Ascenseur" },
   { code: "HHCE+HHCF", label: "Ascenseur 5 ans" },
   { code: "HHCH",      label: "Porte et portail" },
