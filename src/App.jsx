@@ -50,6 +50,24 @@ async function addBatimentDB(communeId, nom) {
 async function deleteBatimentDB(id) { return api(`/rest/v1/batiments?id=eq.${id}`, "DELETE"); }
 async function updateBatimentDB(id, data) { return api(`/rest/v1/batiments?id=eq.${id}`, "PATCH", data); }
 
+// Échéances - missions dont la date anniversaire est dans moins d'1 mois
+async function fetchEcheances() {
+  // Récupérer toutes les missions avec date + commune_id via jointure
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/missions?select=id,batiment_id,code,label,date_intervention,batiments(commune_id)&date_intervention=not.is.null`,
+    { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+  );
+  const missions = await res.json();
+  return missions.filter(m => {
+    if (!m.date_intervention) return false;
+    const dateAnniv = new Date(m.date_intervention);
+    dateAnniv.setFullYear(dateAnniv.getFullYear() + 1);
+    const now = new Date();
+    const limit = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
+    return dateAnniv >= now && dateAnniv <= limit;
+  });
+}
+
 // Intervenants
 async function fetchIntervenants() {
   return api("/rest/v1/intervenants?select=id,nom,prenom&order=nom.asc");
@@ -211,11 +229,16 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
   const [loading, setLoading] = useState(true);
   const [newCommune, setNewCommune] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [echeances, setEcheances] = useState([]); // missions en alerte
 
   useEffect(() => {
     setLoading(true);
-    fetchCommunes()
-      .then(data => { setCommunes(data); setLoading(false); })
+    Promise.all([fetchCommunes(), fetchEcheances()])
+      .then(([comData, echData]) => {
+        setCommunes(comData);
+        setEcheances(echData || []);
+        setLoading(false);
+      })
       .catch(()=>setLoading(false));
   }, []);
 
@@ -271,20 +294,30 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(200px, 1fr))", gap:16, marginBottom:32 }}>
             {communes.map((commune) => (
               <div key={commune.id} style={{ position:"relative" }}>
-                <button onClick={()=>onSelectCommune(commune)}
-                  style={{ width:"100%", background:"white", border:"1px solid #e2e8f0", borderRadius:12, padding:"20px 16px 16px", cursor:"pointer", textAlign:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", transition:"all 0.2s", display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}
-                  onMouseEnter={(e)=>{ e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,0.2)"; e.currentTarget.style.borderColor="#2563eb"; e.currentTarget.style.transform="translateY(-2px)"; }}
-                  onMouseLeave={(e)=>{ e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.06)"; e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.transform="translateY(0)"; }}>
-                  <span style={{ fontSize:32 }}>🏘️</span>
-                  <span style={{ fontWeight:700, color:"#1e3a5f", fontSize:14, lineHeight:1.3 }}>{commune.nom}</span>
-                  <span style={{
-                    background: commune.batiments?.[0]?.count > 0 ? "#dbeafe" : "#f1f5f9",
-                    color: commune.batiments?.[0]?.count > 0 ? "#1e3a5f" : "#94a3b8",
-                    fontSize:11, fontWeight:700, padding:"2px 10px", borderRadius:20, marginTop:2
-                  }}>
-                    {commune.batiments?.[0]?.count || 0} bâtiment{(commune.batiments?.[0]?.count || 0) !== 1 ? "s" : ""}
-                  </span>
-                </button>
+                {(() => {
+                  const communeAlerts = echeances.filter(e => e.batiments?.commune_id === commune.id).length;
+                  return (
+                    <button onClick={()=>onSelectCommune(commune)}
+                      style={{ width:"100%", background: communeAlerts > 0 ? "#fff5f5" : "white", border:`1.5px solid ${communeAlerts > 0 ? "#ef4444" : "#e2e8f0"}`, borderRadius:12, padding:"20px 16px 16px", cursor:"pointer", textAlign:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", transition:"all 0.2s", display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}
+                      onMouseEnter={(e)=>{ e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,0.2)"; e.currentTarget.style.transform="translateY(-2px)"; }}
+                      onMouseLeave={(e)=>{ e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.06)"; e.currentTarget.style.transform="translateY(0)"; }}>
+                      <span style={{ fontSize:32 }}>{communeAlerts > 0 ? "⚠️" : "🏘️"}</span>
+                      <span style={{ fontWeight:700, color: communeAlerts > 0 ? "#dc2626" : "#1e3a5f", fontSize:14, lineHeight:1.3 }}>{commune.nom}</span>
+                      {communeAlerts > 0 && (
+                        <span style={{ background:"#fecaca", color:"#dc2626", fontSize:11, fontWeight:700, padding:"2px 10px", borderRadius:20 }}>
+                          ⚠️ {communeAlerts} échéance{communeAlerts > 1 ? "s" : ""} proche{communeAlerts > 1 ? "s" : ""}
+                        </span>
+                      )}
+                      <span style={{
+                        background: commune.batiments?.[0]?.count > 0 ? "#dbeafe" : "#f1f5f9",
+                        color: commune.batiments?.[0]?.count > 0 ? "#1e3a5f" : "#94a3b8",
+                        fontSize:11, fontWeight:700, padding:"2px 10px", borderRadius:20, marginTop:2
+                      }}>
+                        {commune.batiments?.[0]?.count || 0} bâtiment{(commune.batiments?.[0]?.count || 0) !== 1 ? "s" : ""}
+                      </span>
+                    </button>
+                  );
+                })()}
                 <button onClick={()=>setConfirmDelete(commune)} title="Supprimer cette commune"
                   style={{ position:"absolute", top:8, right:8, background:"rgba(239,68,68,0.1)", border:"none", borderRadius:6, color:"#ef4444", fontSize:13, fontWeight:700, cursor:"pointer", padding:"3px 7px", lineHeight:1 }}
                   onMouseEnter={(e)=>e.currentTarget.style.background="rgba(239,68,68,0.25)"}
@@ -330,6 +363,7 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
   const [addMissionOpen, setAddMissionOpen] = useState({});
   const [editingBatId, setEditingBatId] = useState(null);
   const [intervenants, setIntervenants] = useState([]);
+  const [echeances, setEcheances] = useState([]); // ids de missions en alerte
   const [missionPicker, setMissionPicker] = useState(null);
   const [pickerSelections, setPickerSelections] = useState([]);
   const [renameBatiment, setRenameBatiment] = useState(null); // {id, nom}
@@ -338,6 +372,15 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
   useEffect(() => {
     loadAll();
   }, [commune.id]);
+
+  const isEnAlerte = (mission) => {
+    if (!mission.dateIntervention) return false;
+    const dateAnniv = new Date(mission.dateIntervention);
+    dateAnniv.setFullYear(dateAnniv.getFullYear() + 1);
+    const now = new Date();
+    const limit = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
+    return dateAnniv >= now && dateAnniv <= limit;
+  };
 
   const loadAll = async () => {
     setLoading(true);
@@ -498,10 +541,12 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
               const batPropose = bat.missions.reduce((s,m)=>s+(parseFloat(m.unPropose)||0),0);
               const usedCodes = bat.missions.map(m=>m.code);
               const availableMissions = MISSIONS_DEF.filter(m=>!usedCodes.includes(m.code));
+              const batHasAlert = bat.missions.some(m => isEnAlerte(m));
               return (
                 <div key={bat.id} style={{ background:"white", borderRadius:12, marginBottom:16, boxShadow:"0 1px 4px rgba(0,0,0,0.08)", overflow:"hidden", border:"1px solid #e2e8f0" }}>
-                  <div onClick={()=>toggleExpand(bat.id, bat.expanded)} style={{ display:"flex", alignItems:"center", padding:"14px 20px", background:"linear-gradient(90deg,#1e3a5f,#2a4a7f)", cursor:"pointer", userSelect:"none" }}>
-                    <span style={{ color:"#60a5fa", fontSize:11, fontWeight:700, marginRight:12, letterSpacing:1 }}>#{String(batIdx+1).padStart(2,"0")}</span>
+                  <div onClick={()=>toggleExpand(bat.id, bat.expanded)} style={{ display:"flex", alignItems:"center", padding:"14px 20px", background:batHasAlert?"linear-gradient(90deg,#7f1d1d,#b91c1c)":"linear-gradient(90deg,#1e3a5f,#2a4a7f)", cursor:"pointer", userSelect:"none" }}>
+                    {batHasAlert && <span style={{ background:"rgba(255,255,255,0.15)", color:"white", fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, marginRight:10, whiteSpace:"nowrap" }}>⚠️ Échéance proche</span>}
+                    <span style={{ color: batHasAlert?"#fca5a5":"#60a5fa", fontSize:11, fontWeight:700, marginRight:12, letterSpacing:1 }}>#{String(batIdx+1).padStart(2,"0")}</span>
                     <span style={{ color:"white", fontWeight:700, fontSize:14, flex:1 }}>{bat.nom}</span>
                     <span style={{ color:"#93c5fd", fontSize:12, marginRight:16 }}>
                       Prévu: <b>{batPrevu.toFixed(1)}</b> UM &nbsp;|&nbsp; Proposé: <b>{batPropose.toFixed(1)}</b> UM &nbsp;|&nbsp;
@@ -528,8 +573,11 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                         </tr></thead>
                         <tbody>
                           {bat.missions.map((mission,i)=>(
-                            <tr key={mission.id} style={{ background:i%2===0?"#f8fafc":"white" }}>
-                              <td style={{...td,fontWeight:700,color:"#1e3a5f",whiteSpace:"nowrap"}}><span style={{ background:missionColors[mission.code]||"#f0f9ff", padding:"3px 8px", borderRadius:5, fontSize:11 }}>{mission.code}</span></td>
+                            <tr key={mission.id} style={{ background: isEnAlerte(mission) ? "#fef2f2" : i%2===0?"#f8fafc":"white" }}>
+                              <td style={{...td,fontWeight:700,color:"#1e3a5f",whiteSpace:"nowrap"}}>
+                                <span style={{ background:missionColors[mission.code]||"#f0f9ff", padding:"3px 8px", borderRadius:5, fontSize:11 }}>{mission.code}</span>
+                                {isEnAlerte(mission) && <span style={{ marginLeft:6, fontSize:11, color:"#dc2626", fontWeight:700 }}>⚠️</span>}
+                              </td>
                               <td style={{...td,color:"#475569"}}>{mission.label}</td>
                               <td style={td}>
                                 {editingBatId === bat.id
