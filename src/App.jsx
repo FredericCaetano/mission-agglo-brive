@@ -223,7 +223,7 @@ function LoginPage({ onLogin }) {
           <h2 style={{ margin:"0 0 24px", fontSize:17, color:"#1e3a5f", fontWeight:700, textAlign:"center" }}>Connexion</h2>
           <div style={{ marginBottom:16 }}>
             <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:6, textTransform:"uppercase", letterSpacing:0.5 }}>Code salarié</label>
-            <input type="text" value={code} onChange={(e)=>setCode(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&handleLogin()} placeholder="Ex : 11630"
+            <input type="text" value={code} onChange={(e)=>setCode(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&handleLogin()} placeholder="Ex : 12345"
               style={{ width:"100%", padding:"11px 14px", borderRadius:8, border:"1.5px solid #e2e8f0", fontSize:15, outline:"none", boxSizing:"border-box" }}
               onFocus={(e)=>e.target.style.borderColor="#2563eb"} onBlur={(e)=>e.target.style.borderColor="#e2e8f0"} />
           </div>
