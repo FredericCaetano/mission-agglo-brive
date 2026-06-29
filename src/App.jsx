@@ -50,6 +50,11 @@ async function addBatimentDB(communeId, nom) {
 async function deleteBatimentDB(id) { return api(`/rest/v1/batiments?id=eq.${id}`, "DELETE"); }
 async function updateBatimentDB(id, data) { return api(`/rest/v1/batiments?id=eq.${id}`, "PATCH", data); }
 
+// Intervenants
+async function fetchIntervenants() {
+  return api("/rest/v1/intervenants?select=id,nom,prenom&order=nom.asc");
+}
+
 // Missions
 async function fetchMissions(batimentId) {
   return api(`/rest/v1/missions?batiment_id=eq.${batimentId}&select=*&order=id.asc`);
@@ -105,11 +110,11 @@ async function envoyerNotification(user, actions) {
 
 const MISSIONS_DEF = [
   { code: "HGAB",      label: "VP Électricité" },
-  { code: "HKDB",      label: "VP Gaz ERP" },
-  { code: "HKDC",      label: "Grande cuisine ERP" },
+  { code: "HKDB",      label: "GAZ ERP" },
+  { code: "HKDC",      label: "GC ERP" },
   { code: "HKCB",      label: "Efficacité énergétique" },
   { code: "HGCA",      label: "Foudre" },
-  { code: "HBBC",      label: "SSI 3 ans" },
+  { code: "HBBC",      label: "Tri SSI" },
   { code: "HHCB",      label: "Ascenseur" },
   { code: "HHCE+HHCF", label: "Ascenseur 5 ans" },
   { code: "HHCH",      label: "Porte et portail" },
@@ -323,7 +328,8 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDeleteMission, setConfirmDeleteMission] = useState(null);
   const [addMissionOpen, setAddMissionOpen] = useState({});
-  const [editingBatId, setEditingBatId] = useState(null); // id du bâtiment en cours d'édition
+  const [editingBatId, setEditingBatId] = useState(null);
+  const [intervenants, setIntervenants] = useState([]);
   const [missionPicker, setMissionPicker] = useState(null);
   const [pickerSelections, setPickerSelections] = useState([]);
   const [renameBatiment, setRenameBatiment] = useState(null); // {id, nom}
@@ -336,10 +342,12 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
   const loadAll = async () => {
     setLoading(true);
     try {
+      const ivs = await fetchIntervenants();
+      setIntervenants(ivs || []);
       const bats = await fetchBatiments(commune.id);
       const batsWithMissions = await Promise.all(bats.map(async b => {
         const missions = await fetchMissions(b.id);
-        return { ...b, expanded: b.expanded ?? true, missions: missions.map(m => ({ ...m, unPrevu: m.un_prevu, unPropose: m.un_propose })) };
+        return { ...b, expanded: b.expanded ?? true, missions: missions.map(m => ({ ...m, unPrevu: m.un_prevu, unPropose: m.un_propose, dateIntervention: m.date_intervention || "" })) };
       }));
       setBatiments(batsWithMissions);
     } catch(e) { alert("Erreur de chargement : " + e.message); }
@@ -347,7 +355,7 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
   };
 
   const updateMission = async (batId, missionId, field, value) => {
-    const dbField = field === "unPrevu" ? "un_prevu" : field === "unPropose" ? "un_propose" : field;
+    const dbField = field === "unPrevu" ? "un_prevu" : field === "unPropose" ? "un_propose" : field === "dateIntervention" ? "date_intervention" : field;
     setBatiments(prev => prev.map(b => b.id === batId ? { ...b, missions: b.missions.map(m => m.id === missionId ? { ...m, [field]: value } : m) } : b));
     try {
       await updateMissionDB(missionId, { [dbField]: value });
@@ -515,6 +523,7 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                           <th style={th}>Code</th><th style={th}>Mission</th>
                           <th style={{...th,width:90}}>UM Prévu</th><th style={{...th,width:90}}>UM Proposé</th>
                           <th style={{...th,width:80}}>Réalisé</th><th style={{...th,minWidth:140}}>Intervenant</th>
+                          <th style={{...th,width:140}}>Date intervention</th>
                           <th style={{...th,minWidth:200}}>Commentaires</th><th style={{...th,width:40}}></th>
                         </tr></thead>
                         <tbody>
@@ -537,9 +546,27 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                                   style={{ width:18,height:18,cursor:editingBatId===bat.id?"pointer":"default",accentColor:"#2563eb",opacity:editingBatId===bat.id?1:0.6 }}/>
                               </td>
                               <td style={td}>
-                                {editingBatId === bat.id
-                                  ? <input type="text" value={mission.intervenant} onChange={(e)=>updateMission(bat.id,mission.id,"intervenant",e.target.value)} placeholder="Nom..." style={{...inputStyle,width:"100%"}}/>
-                                  : <span style={{ display:"block", color:mission.intervenant?"#1e3a5f":"#cbd5e1", fontSize:13, padding:"6px 10px" }}>{mission.intervenant||"—"}</span>}
+                                {editingBatId === bat.id ? (
+                                  <select value={mission.intervenant} onChange={(e)=>updateMission(bat.id,mission.id,"intervenant",e.target.value)}
+                                    style={{ padding:"6px 8px", borderRadius:6, border:"1px solid #e2e8f0", fontSize:13, outline:"none", background:"#f8fafc", width:"100%", cursor:"pointer" }}>
+                                    <option value="">— Choisir —</option>
+                                    {intervenants.map(iv=>(
+                                      <option key={iv.id} value={`${iv.prenom} ${iv.nom}`}>{iv.prenom} {iv.nom}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span style={{ display:"block", color:mission.intervenant?"#1e3a5f":"#cbd5e1", fontSize:13, padding:"6px 10px" }}>{mission.intervenant||"—"}</span>
+                                )}
+                              </td>
+                              <td style={td}>
+                                {editingBatId === bat.id ? (
+                                  <input type="date" value={mission.dateIntervention||""} onChange={(e)=>updateMission(bat.id,mission.id,"dateIntervention",e.target.value)}
+                                    style={{ padding:"6px 8px", borderRadius:6, border:"1px solid #e2e8f0", fontSize:13, outline:"none", background:"#f8fafc", cursor:"pointer" }}/>
+                                ) : (
+                                  <span style={{ display:"block", color:mission.dateIntervention?"#1e3a5f":"#cbd5e1", fontSize:13, padding:"6px 10px", whiteSpace:"nowrap" }}>
+                                    {mission.dateIntervention ? new Date(mission.dateIntervention).toLocaleDateString("fr-FR") : "—"}
+                                  </span>
+                                )}
                               </td>
                               <td style={td}>
                                 {editingBatId === bat.id
