@@ -260,7 +260,7 @@ function LoginPage({ onLogin }) {
           <h2 style={{ margin:"0 0 24px", fontSize:17, color:"#1e3a5f", fontWeight:700, textAlign:"center" }}>Connexion</h2>
           <div style={{ marginBottom:16 }}>
             <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:6, textTransform:"uppercase", letterSpacing:0.5 }}>Code salarié</label>
-            <input type="text" value={code} onChange={(e)=>setCode(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&handleLogin()} placeholder="Ex : 12345"
+            <input type="text" value={code} onChange={(e)=>setCode(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&handleLogin()} placeholder="Ex : 11630"
               style={{ width:"100%", padding:"11px 14px", borderRadius:8, border:"1.5px solid #e2e8f0", fontSize:15, outline:"none", boxSizing:"border-box" }}
               onFocus={(e)=>e.target.style.borderColor="#2563eb"} onBlur={(e)=>e.target.style.borderColor="#e2e8f0"} />
           </div>
@@ -403,10 +403,10 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
         </div>
         {/* Boutons filtre communes */}
         <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
-          {["toutes","en_cours","terminees"].map(f => (
+          {["toutes","en_cours","terminees","alertes"].map(f => (
             <button key={f} onClick={()=>setFiltreCommune(f)}
-              style={{ padding:"8px 16px", borderRadius:8, border:`1.5px solid ${filtreCommune===f?"#2563eb":"#e2e8f0"}`, background:filtreCommune===f?"#2563eb":"white", color:filtreCommune===f?"white":"#475569", fontWeight:600, fontSize:12, cursor:"pointer" }}>
-              {f==="toutes"?"🏘️ Toutes":f==="en_cours"?"🔄 En cours":"✅ Terminées"}
+              style={{ padding:"8px 16px", borderRadius:8, border:`1.5px solid ${filtreCommune===f?(f==="alertes"?"#ef4444":"#2563eb"):"#e2e8f0"}`, background:filtreCommune===f?(f==="alertes"?"#ef4444":"#2563eb"):"white", color:filtreCommune===f?"white":"#475569", fontWeight:600, fontSize:12, cursor:"pointer" }}>
+              {f==="toutes"?"🏘️ Toutes":f==="en_cours"?"🔄 En cours":f==="terminees"?"✅ Terminées":"⚠️ Échéances"}
             </button>
           ))}
           <select value={filtreIntervenant} onChange={e=>setFiltreIntervenant(e.target.value)}
@@ -436,6 +436,7 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
               const realise = Number(stats?.missions_realisees || 0);
               if (filtreCommune === "terminees" && (total === 0 || realise < total)) return false;
               if (filtreCommune === "en_cours" && (realise === 0 || (realise === total && total > 0))) return false;
+              if (filtreCommune === "alertes" && echeances.filter(e => e.batiments?.commune_id === commune.id).length === 0) return false;
               if (communesIntervenantIds !== null && !communesIntervenantIds.includes(commune.id)) return false;
               return true;
             }).map((commune) => (
@@ -657,9 +658,11 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
 
   const updateMission = async (batId, missionId, field, value) => {
     const dbField = field === "unPrevu" ? "un_prevu" : field === "unPropose" ? "un_propose" : field === "dateIntervention" ? "date_intervention" : field;
+    // Pour la date, envoyer null si vide pour bien effacer en base
+    const dbValue = field === "dateIntervention" && value === "" ? null : value;
     setBatiments(prev => prev.map(b => b.id === batId ? { ...b, missions: b.missions.map(m => m.id === missionId ? { ...m, [field]: value } : m) } : b));
     try {
-      await updateMissionDB(missionId, { [dbField]: value });
+      await updateMissionDB(missionId, { [dbField]: dbValue });
       const bat = batiments.find(b => b.id === batId);
       const mission = bat?.missions.find(m => m.id === missionId);
       const fieldLabel = field === "unPrevu" ? "UM Prévu" : field === "unPropose" ? "UM Proposé" : field === "realise" ? "Réalisé" : field === "intervenant" ? "Intervenant" : "Commentaire";
@@ -746,6 +749,7 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
     const realise = b.missions.filter(m => m.realise).length;
     if (filtreBat === "termines" && (total === 0 || realise < total)) return false;
     if (filtreBat === "en_cours" && (realise === 0 || (realise === total && total > 0))) return false;
+    if (filtreBat === "alertes" && !b.missions.some(m => isEnAlerte(m))) return false;
     // Filtre intervenant
     if (filtreIntervenantBat.trim()) {
       const hasIntervenant = b.missions.some(m => m.intervenant === filtreIntervenantBat.trim());
@@ -805,10 +809,10 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
           <button onClick={()=>batiments.forEach(b=>{ if(b.expanded){toggleExpand(b.id,true);} })} style={{ display:"flex", alignItems:"center", gap:6, padding:"10px 18px", borderRadius:10, border:"1px solid #e2e8f0", background:"white", color:"#1e3a5f", fontWeight:600, fontSize:13, cursor:"pointer", whiteSpace:"nowrap" }}>⊟ Tout réduire</button>
         </div>
         <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
-          {["tous","en_cours","termines"].map(f=>(
+          {["tous","en_cours","termines","alertes"].map(f=>(
             <button key={f} onClick={()=>setFiltreBat(f)}
-              style={{ padding:"7px 14px", borderRadius:8, border:`1.5px solid ${filtreBat===f?"#2563eb":"#e2e8f0"}`, background:filtreBat===f?"#2563eb":"white", color:filtreBat===f?"white":"#475569", fontWeight:600, fontSize:12, cursor:"pointer" }}>
-              {f==="tous"?"🏢 Tous":f==="en_cours"?"🔄 En cours":"✅ Terminés"}
+              style={{ padding:"7px 14px", borderRadius:8, border:`1.5px solid ${filtreBat===f?(f==="alertes"?"#ef4444":"#2563eb"):"#e2e8f0"}`, background:filtreBat===f?(f==="alertes"?"#ef4444":"#2563eb"):"white", color:filtreBat===f?"white":"#475569", fontWeight:600, fontSize:12, cursor:"pointer" }}>
+              {f==="tous"?"🏢 Tous":f==="en_cours"?"🔄 En cours":f==="termines"?"✅ Terminés":"⚠️ Échéances"}
             </button>
           ))}
           <select value={filtreIntervenantBat} onChange={e=>setFiltreIntervenantBat(e.target.value)}
