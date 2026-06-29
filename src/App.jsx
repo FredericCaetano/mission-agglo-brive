@@ -77,6 +77,11 @@ async function fetchGlobalStats() {
   };
 }
 
+// Stats missions par commune
+async function fetchCommuneStats() {
+  return api("/rest/v1/rpc/get_commune_mission_stats", "POST", {});
+}
+
 // Échéances - missions dont la date anniversaire est dans moins d'1 mois
 async function fetchEcheances() {
   // Récupérer toutes les missions avec date + commune_id via jointure
@@ -258,14 +263,19 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [echeances, setEcheances] = useState([]);
   const [globalStats, setGlobalStats] = useState({ totalBatiments: 0, missionsRealisees: 0, totalMissions: 0 });
+  const [communeStats, setCommuneStats] = useState({});
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchCommunes(), fetchEcheances(), fetchGlobalStats()])
-      .then(([comData, echData, statsData]) => {
+    Promise.all([fetchCommunes(), fetchEcheances(), fetchGlobalStats(), fetchCommuneStats()])
+      .then(([comData, echData, statsData, statsCommune]) => {
         setCommunes(comData);
         setEcheances(echData || []);
         setGlobalStats(statsData || { totalBatiments: 0, missionsRealisees: 0, totalMissions: 0 });
+        // Transform array into object keyed by commune_id
+        const statsMap = {};
+        (statsCommune || []).forEach(s => { statsMap[s.commune_id] = s; });
+        setCommuneStats(statsMap);
         setLoading(false);
       })
       .catch(()=>setLoading(false));
@@ -363,23 +373,6 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
                           ⚠️ {communeAlerts} échéance{communeAlerts > 1 ? "s" : ""} proche{communeAlerts > 1 ? "s" : ""}
                         </span>
                       )}
-                      {(() => {
-                        const totalMissions = commune.batiments?.reduce((s, b) => s + (b.missions?.length || 0), 0) || 0;
-                        const realisees = commune.batiments?.reduce((s, b) => s + (b.missions?.filter(m => m.realise)?.length || 0), 0) || 0;
-                        const pct = totalMissions > 0 ? Math.round(realisees / totalMissions * 100) : 0;
-                        return totalMissions > 0 ? (
-                          <div style={{ width:"100%", textAlign:"center" }}>
-                            <div style={{ fontSize:11, color:"#64748b", marginBottom:4 }}>
-                              <span style={{ fontWeight:700, color:"#059669" }}>{realisees}</span>
-                              <span style={{ color:"#94a3b8" }}> / {totalMissions} missions</span>
-                            </div>
-                            <div style={{ background:"#e2e8f0", borderRadius:10, height:6, width:"100%", overflow:"hidden" }}>
-                              <div style={{ background: pct === 100 ? "#059669" : pct > 50 ? "#2563eb" : "#f59e0b", height:"100%", width:`${pct}%`, borderRadius:10, transition:"width 0.3s" }} />
-                            </div>
-                            <div style={{ fontSize:10, color:"#94a3b8", marginTop:2 }}>{pct}%</div>
-                          </div>
-                        ) : null;
-                      })()}
                       <span style={{
                         background: commune.batiments?.[0]?.count > 0 ? "#dbeafe" : "#f1f5f9",
                         color: commune.batiments?.[0]?.count > 0 ? "#1e3a5f" : "#94a3b8",
@@ -387,6 +380,26 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
                       }}>
                         {commune.batiments?.[0]?.count || 0} bâtiment{(commune.batiments?.[0]?.count || 0) !== 1 ? "s" : ""}
                       </span>
+                      {communeStats[commune.id] && communeStats[commune.id].total_missions > 0 && (() => {
+                        const total = Number(communeStats[commune.id].total_missions);
+                        const realise = Number(communeStats[commune.id].missions_realisees);
+                        const pct = Math.round(realise / total * 100);
+                        return (
+                          <div style={{ width:"100%", textAlign:"center", marginTop:4 }}>
+                            <div style={{ fontSize:11, color:"#64748b", marginBottom:4 }}>
+                              <span style={{ fontWeight:700, color:"#059669" }}>{realise}</span>
+                              <span style={{ color:"#94a3b8" }}> / {total} missions</span>
+                            </div>
+                            <div style={{ background:"#e2e8f0", borderRadius:10, height:5, width:"100%", overflow:"hidden" }}>
+                              <div style={{
+                                background: pct === 100 ? "#059669" : pct > 50 ? "#2563eb" : "#f59e0b",
+                                height:"100%", width:`${pct}%`, borderRadius:10, transition:"width 0.3s"
+                              }} />
+                            </div>
+                            <div style={{ fontSize:10, color:"#94a3b8", marginTop:2 }}>{pct}%</div>
+                          </div>
+                        );
+                      })()}
                     </button>
                   );
                 })()}
