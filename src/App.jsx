@@ -50,6 +50,33 @@ async function addBatimentDB(communeId, nom) {
 async function deleteBatimentDB(id) { return api(`/rest/v1/batiments?id=eq.${id}`, "DELETE"); }
 async function updateBatimentDB(id, data) { return api(`/rest/v1/batiments?id=eq.${id}`, "PATCH", data); }
 
+// Stats globales bâtiments réalisés
+async function fetchGlobalStats() {
+  // Total bâtiments
+  const resBats = await fetch(
+    `${SUPABASE_URL}/rest/v1/batiments?select=id`,
+    { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+  );
+  const bats = await resBats.json();
+  // Missions réalisées
+  const resMissions = await fetch(
+    `${SUPABASE_URL}/rest/v1/missions?select=id,realise&realise=eq.true`,
+    { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+  );
+  const missionsRealisees = await resMissions.json();
+  // Total missions
+  const resTotalMissions = await fetch(
+    `${SUPABASE_URL}/rest/v1/missions?select=id`,
+    { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+  );
+  const totalMissions = await resTotalMissions.json();
+  return {
+    totalBatiments: bats.length,
+    missionsRealisees: missionsRealisees.length,
+    totalMissions: totalMissions.length
+  };
+}
+
 // Échéances - missions dont la date anniversaire est dans moins d'1 mois
 async function fetchEcheances() {
   // Récupérer toutes les missions avec date + commune_id via jointure
@@ -229,14 +256,16 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
   const [loading, setLoading] = useState(true);
   const [newCommune, setNewCommune] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const [echeances, setEcheances] = useState([]); // missions en alerte
+  const [echeances, setEcheances] = useState([]);
+  const [globalStats, setGlobalStats] = useState({ totalBatiments: 0, missionsRealisees: 0, totalMissions: 0 });
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchCommunes(), fetchEcheances()])
-      .then(([comData, echData]) => {
+    Promise.all([fetchCommunes(), fetchEcheances(), fetchGlobalStats()])
+      .then(([comData, echData, statsData]) => {
         setCommunes(comData);
         setEcheances(echData || []);
+        setGlobalStats(statsData || { totalBatiments: 0, missionsRealisees: 0, totalMissions: 0 });
         setLoading(false);
       })
       .catch(()=>setLoading(false));
@@ -286,8 +315,34 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
         </div>
       </div>
       <div style={{ maxWidth:1200, margin:"0 auto", padding:"32px" }}>
-        <h2 style={{ color:"#1e3a5f", fontSize:20, fontWeight:700, marginBottom:8 }}>Choisir une commune</h2>
-        <p style={{ color:"#64748b", fontSize:14, marginBottom:24 }}>Sélectionnez la commune pour accéder à la saisie des bâtiments.</p>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:16, marginBottom:24 }}>
+          <div>
+            <h2 style={{ color:"#1e3a5f", fontSize:20, fontWeight:700, marginBottom:4 }}>Choisir une commune</h2>
+            <p style={{ color:"#64748b", fontSize:14, margin:0 }}>Sélectionnez la commune pour accéder à la saisie des bâtiments.</p>
+          </div>
+          {/* Compteur global */}
+          <div style={{ background:"white", borderRadius:12, padding:"14px 24px", border:"1px solid #e2e8f0", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", display:"flex", alignItems:"center", gap:20 }}>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:1, marginBottom:2 }}>Bâtiments</div>
+              <div style={{ fontSize:22, fontWeight:700, color:"#1e3a5f" }}>{globalStats.totalBatiments}</div>
+            </div>
+            <div style={{ width:1, height:36, background:"#e2e8f0" }} />
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:1, marginBottom:2 }}>Missions réalisées</div>
+              <div style={{ fontSize:22, fontWeight:700, color:"#059669" }}>
+                {globalStats.missionsRealisees}
+                <span style={{ fontSize:13, fontWeight:400, color:"#94a3b8" }}> / {globalStats.totalMissions}</span>
+              </div>
+            </div>
+            <div style={{ width:1, height:36, background:"#e2e8f0" }} />
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:1, marginBottom:2 }}>Avancement</div>
+              <div style={{ fontSize:22, fontWeight:700, color:"#2563eb" }}>
+                {globalStats.totalMissions > 0 ? Math.round(globalStats.missionsRealisees / globalStats.totalMissions * 100) : 0}%
+              </div>
+            </div>
+          </div>
+        </div>
         {loading ? (
           <div style={{ textAlign:"center", padding:48, color:"#64748b" }}>⏳ Chargement des communes...</div>
         ) : (<>
@@ -548,9 +603,15 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                     {batHasAlert && <span style={{ background:"rgba(255,255,255,0.15)", color:"white", fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, marginRight:10, whiteSpace:"nowrap" }}>⚠️ Échéance proche</span>}
                     <span style={{ color: batHasAlert?"#fca5a5":"#60a5fa", fontSize:11, fontWeight:700, marginRight:12, letterSpacing:1 }}>#{String(batIdx+1).padStart(2,"0")}</span>
                     <span style={{ color:"white", fontWeight:700, fontSize:14, flex:1 }}>{bat.nom}</span>
-                    <span style={{ color:"#93c5fd", fontSize:12, marginRight:16 }}>
+                    <span style={{ color: batHasAlert?"#fca5a5":"#93c5fd", fontSize:12, marginRight:16 }}>
                       Prévu: <b>{batPrevu.toFixed(1)}</b> UM &nbsp;|&nbsp; Proposé: <b>{batPropose.toFixed(1)}</b> UM &nbsp;|&nbsp;
-                      <span style={{ color:"#a5b4fc" }}>{bat.missions.length} mission{bat.missions.length !== 1 ? "s" : ""}</span>
+                      <span style={{
+                        background: bat.missions.filter(m=>m.realise).length === bat.missions.length && bat.missions.length > 0 ? "rgba(52,211,153,0.2)" : "rgba(255,255,255,0.1)",
+                        color: bat.missions.filter(m=>m.realise).length === bat.missions.length && bat.missions.length > 0 ? "#6ee7b7" : (batHasAlert?"#fca5a5":"#a5b4fc"),
+                        padding:"2px 10px", borderRadius:20, fontWeight:700
+                      }}>
+                        {bat.missions.filter(m=>m.realise).length} / {bat.missions.length} mission{bat.missions.length !== 1 ? "s" : ""}
+                      </span>
                     </span>
                     <button onClick={(e)=>{e.stopPropagation();setRenameBatiment(bat);setRenameValue(bat.nom);}} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"white", borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:12, marginRight:6 }}>✏️ Renommer</button>
                     {editingBatId === bat.id ? (
