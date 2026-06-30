@@ -109,6 +109,22 @@ async function fetchCommunesByIntervenant(intervenant) {
   return data.map(d => d.commune_id);
 }
 
+// Récapitulatif des missions non réalisées
+async function fetchNonRealiseMissions() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/missions?select=id,code,label,commentaires,batiment_id,batiments!inner(id,nom,commune_id,communes!inner(id,nom))&non_realise=eq.true`,
+    { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.sort((a,b) => {
+    const ca = a.batiments?.communes?.nom || "";
+    const cb = b.batiments?.communes?.nom || "";
+    if (ca !== cb) return ca.localeCompare(cb, "fr");
+    return (a.batiments?.nom||"").localeCompare(b.batiments?.nom||"", "fr");
+  });
+}
+
 // Stats missions par commune
 async function fetchCommuneStats() {
   return api("/rest/v1/rpc/get_commune_mission_stats", "POST", {});
@@ -304,6 +320,7 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
   const [recapTab, setRecapTab] = useState("par_commune"); // par_commune | tableau
   const [recapData, setRecapData] = useState([]);
   const [loadingRecap, setLoadingRecap] = useState(false);
+  const [nonRealiseData, setNonRealiseData] = useState([]);
 
   useEffect(() => {
     if (filtreIntervenant) {
@@ -418,8 +435,9 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
           </select>
           <button onClick={async()=>{
             setShowRecap(true); setLoadingRecap(true);
-            const data = await fetchRecapMissions();
+            const [data, nrData] = await Promise.all([fetchRecapMissions(), fetchNonRealiseMissions()]);
             setRecapData(data || []);
+            setNonRealiseData(nrData || []);
             setLoadingRecap(false);
           }} style={{ padding:"8px 16px", borderRadius:8, border:"1.5px solid #059669", background:"#d1fae5", color:"#059669", fontWeight:700, fontSize:12, cursor:"pointer", whiteSpace:"nowrap" }}>
             📊 Récapitulatif global
@@ -552,17 +570,44 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
               </div>
             </div>
             <div style={{ padding:"16px 24px", borderBottom:"1px solid #e2e8f0", display:"flex", gap:8 }}>
-              {["par_commune","tableau"].map(t=>(
+              {["par_commune","tableau","non_realisees"].map(t=>(
                 <button key={t} onClick={()=>setRecapTab(t)}
-                  style={{ padding:"8px 18px", borderRadius:8, border:`1.5px solid ${recapTab===t?"#2563eb":"#e2e8f0"}`, background:recapTab===t?"#2563eb":"white", color:recapTab===t?"white":"#475569", fontWeight:600, fontSize:13, cursor:"pointer" }}>
-                  {t==="par_commune"?"🏘️ Par commune":"📋 Tableau détaillé"}
+                  style={{ padding:"8px 18px", borderRadius:8, border:`1.5px solid ${recapTab===t?(t==="non_realisees"?"#ef4444":"#2563eb"):"#e2e8f0"}`, background:recapTab===t?(t==="non_realisees"?"#ef4444":"#2563eb"):"white", color:recapTab===t?"white":"#475569", fontWeight:600, fontSize:13, cursor:"pointer" }}>
+                  {t==="par_commune"?"🏘️ Par commune":t==="tableau"?"📋 Tableau détaillé":"⊘ Non réalisées"}
                 </button>
               ))}
-              <span style={{ marginLeft:"auto", color:"#64748b", fontSize:13, alignSelf:"center" }}>{recapData.length} mission{recapData.length!==1?"s":""} réalisée{recapData.length!==1?"s":""}</span>
+              <span style={{ marginLeft:"auto", color:"#64748b", fontSize:13, alignSelf:"center" }}>
+                {recapTab==="non_realisees" ? `${nonRealiseData.length} mission${nonRealiseData.length!==1?"s":""} non réalisée${nonRealiseData.length!==1?"s":""}` : `${recapData.length} mission${recapData.length!==1?"s":""} réalisée${recapData.length!==1?"s":""}`}
+              </span>
             </div>
             <div id="recap-print-area" style={{ padding:"16px 24px", maxHeight:"65vh", overflowY:"auto" }}>
               {loadingRecap ? (
                 <div style={{ textAlign:"center", padding:48, color:"#64748b" }}>⏳ Chargement...</div>
+              ) : recapTab === "non_realisees" ? (
+                nonRealiseData.length === 0 ? (
+                  <div style={{ textAlign:"center", padding:48, color:"#94a3b8" }}>Aucune mission marquée non réalisée.</div>
+                ) : (
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                    <thead><tr style={{ background:"#7f1d1d", color:"white" }}>
+                      <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:600 }}>Commune</th>
+                      <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:600 }}>Bâtiment</th>
+                      <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:600 }}>Code</th>
+                      <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:600 }}>Mission</th>
+                      <th style={{ padding:"10px 12px", textAlign:"left", fontWeight:600 }}>Raison</th>
+                    </tr></thead>
+                    <tbody>
+                      {nonRealiseData.map((m,i) => (
+                        <tr key={m.id} style={{ background:i%2===0?"#fef2f2":"white" }}>
+                          <td style={{ padding:"7px 12px", borderBottom:"1px solid #fecaca", color:"#1e3a5f", fontWeight:600 }}>{m.batiments?.communes?.nom||"—"}</td>
+                          <td style={{ padding:"7px 12px", borderBottom:"1px solid #fecaca", color:"#475569" }}>{m.batiments?.nom||"—"}</td>
+                          <td style={{ padding:"7px 12px", borderBottom:"1px solid #fecaca" }}><span style={{ background:"#fee2e2", padding:"2px 8px", borderRadius:4, fontSize:11, fontWeight:700, color:"#991b1b" }}>{m.code}</span></td>
+                          <td style={{ padding:"7px 12px", borderBottom:"1px solid #fecaca", color:"#475569" }}>{m.label}</td>
+                          <td style={{ padding:"7px 12px", borderBottom:"1px solid #fecaca", color:"#7f1d1d" }}>{m.commentaires||"—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
               ) : recapData.length === 0 ? (
                 <div style={{ textAlign:"center", padding:48, color:"#94a3b8" }}>Aucune mission réalisée pour l'instant.</div>
               ) : recapTab === "par_commune" ? (
@@ -652,6 +697,8 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
   const [intervenants, setIntervenants] = useState([]);
   const [filtreBat, setFiltreBat] = useState("tous"); // tous | termines | en_cours
   const [filtreIntervenantBat, setFiltreIntervenantBat] = useState("");
+  const [nonRealiseModal, setNonRealiseModal] = useState(null); // {batId, missionId, code, label}
+  const [nonRealiseRaison, setNonRealiseRaison] = useState("");
   const [echeances, setEcheances] = useState([]); // ids de missions en alerte
   const [missionPicker, setMissionPicker] = useState(null);
   const [pickerSelections, setPickerSelections] = useState([]);
@@ -679,7 +726,7 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
       const bats = await fetchBatiments(commune.id);
       const batsWithMissions = await Promise.all(bats.map(async b => {
         const missions = await fetchMissions(b.id);
-        return { ...b, expanded: b.expanded ?? true, missions: missions.map(m => ({ ...m, unPrevu: m.un_prevu, unPropose: m.un_propose, dateIntervention: m.date_intervention || "" })) };
+        return { ...b, expanded: b.expanded ?? true, missions: missions.map(m => ({ ...m, unPrevu: m.un_prevu, unPropose: m.un_propose, dateIntervention: m.date_intervention || "", nonRealise: m.non_realise || false })) };
       }));
       setBatiments(batsWithMissions);
     } catch(e) { alert("Erreur de chargement : " + e.message); }
@@ -698,6 +745,29 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
       const fieldLabel = field === "unPrevu" ? "UM Prévu" : field === "unPropose" ? "UM Proposé" : field === "realise" ? "Réalisé" : field === "intervenant" ? "Intervenant" : "Commentaire";
       logAction(`[${commune.nom}] <strong>${bat?.nom}</strong> — ${mission?.code} : ${fieldLabel} = "${value}"`);
     } catch(e) { console.error(e); }
+  };
+
+  const toggleNonRealise = (batId, missionId, code, label) => {
+    setNonRealiseModal({ batId, missionId, code, label });
+    setNonRealiseRaison("");
+  };
+
+  const confirmNonRealise = async () => {
+    if (!nonRealiseRaison.trim()) { alert("Veuillez indiquer une raison."); return; }
+    const { batId, missionId } = nonRealiseModal;
+    setBatiments(prev => prev.map(b => b.id === batId ? { ...b, missions: b.missions.map(m => m.id === missionId ? { ...m, nonRealise: true, commentaires: nonRealiseRaison.trim() } : m) } : b));
+    try {
+      await updateMissionDB(missionId, { non_realise: true, commentaires: nonRealiseRaison.trim() });
+      const bat = batiments.find(b => b.id === batId);
+      logAction(`[${commune.nom}] <strong>${bat?.nom}</strong> — Mission ${nonRealiseModal.code} marquée NON RÉALISÉE : "${nonRealiseRaison.trim()}"`);
+    } catch(e) { console.error(e); }
+    setNonRealiseModal(null);
+    setNonRealiseRaison("");
+  };
+
+  const annulerNonRealise = async (batId, missionId) => {
+    setBatiments(prev => prev.map(b => b.id === batId ? { ...b, missions: b.missions.map(m => m.id === missionId ? { ...m, nonRealise: false } : m) } : b));
+    try { await updateMissionDB(missionId, { non_realise: false }); } catch(e) { console.error(e); }
   };
 
   const removeMission = async (batId, missionId) => {
@@ -770,7 +840,8 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
 
   const totalPrevu = batiments.reduce((s,b) => s + b.missions.reduce((ss,m) => ss + (parseFloat(m.unPrevu)||0), 0), 0);
   const totalPropose = batiments.reduce((s,b) => s + b.missions.reduce((ss,m) => ss + (parseFloat(m.unPropose)||0), 0), 0);
-  const totalRealise = batiments.reduce((s,b) => s + b.missions.filter(m => m.realise).length, 0);
+  const totalRealise = batiments.reduce((s,b) => s + b.missions.filter(m => m.realise && !m.nonRealise).length, 0);
+  const totalMissionsActives = batiments.reduce((s,b)=>s+b.missions.filter(m=>!m.nonRealise).length,0);
   const filteredBatiments = batiments.filter(b => {
     // Filtre recherche nom
     if (search.trim() && !b.nom.toLowerCase().includes(search.trim().toLowerCase())) return false;
@@ -818,7 +889,7 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
             { label:"Bâtiments", value:batiments.length, unit:"", color:"#60a5fa" },
             { label:"Total UM Prévus", value:totalPrevu.toFixed(1), unit:"UM", color:"#34d399" },
             { label:"Total UM Proposés", value:totalPropose.toFixed(1), unit:"UM", color:"#fbbf24" },
-            { label:"Missions réalisées", value:totalRealise, unit:`/ ${batiments.reduce((s,b)=>s+b.missions.length,0)}`, color:"#a78bfa" },
+            { label:"Missions réalisées", value:totalRealise, unit:`/ ${totalMissionsActives}`, color:"#a78bfa" },
           ].map(kpi => (
             <div key={kpi.label} style={{ background:"rgba(255,255,255,0.08)", borderRadius:10, padding:"12px 20px", flex:"1 1 160px", borderTop:`3px solid ${kpi.color}` }}>
               <div style={{ color:"rgba(255,255,255,0.6)", fontSize:11, textTransform:"uppercase", letterSpacing:1 }}>{kpi.label}</div>
@@ -872,11 +943,11 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                     <span style={{ color: batHasAlert?"#fca5a5":"#93c5fd", fontSize:12, marginRight:16 }}>
                       Prévu: <b>{batPrevu.toFixed(1)}</b> UM &nbsp;|&nbsp; Proposé: <b>{batPropose.toFixed(1)}</b> UM &nbsp;|&nbsp;
                       <span style={{
-                        background: bat.missions.filter(m=>m.realise).length === bat.missions.length && bat.missions.length > 0 ? "rgba(52,211,153,0.2)" : "rgba(255,255,255,0.1)",
-                        color: bat.missions.filter(m=>m.realise).length === bat.missions.length && bat.missions.length > 0 ? "#6ee7b7" : (batHasAlert?"#fca5a5":"#a5b4fc"),
+                        background: bat.missions.filter(m=>m.realise&&!m.nonRealise).length === bat.missions.filter(m=>!m.nonRealise).length && bat.missions.filter(m=>!m.nonRealise).length > 0 ? "rgba(52,211,153,0.2)" : "rgba(255,255,255,0.1)",
+                        color: bat.missions.filter(m=>m.realise&&!m.nonRealise).length === bat.missions.filter(m=>!m.nonRealise).length && bat.missions.filter(m=>!m.nonRealise).length > 0 ? "#6ee7b7" : (batHasAlert?"#fca5a5":"#a5b4fc"),
                         padding:"2px 10px", borderRadius:20, fontWeight:700
                       }}>
-                        {bat.missions.filter(m=>m.realise).length} / {bat.missions.length} mission{bat.missions.length !== 1 ? "s" : ""}
+                        {bat.missions.filter(m=>m.realise&&!m.nonRealise).length} / {bat.missions.filter(m=>!m.nonRealise).length} mission{bat.missions.filter(m=>!m.nonRealise).length !== 1 ? "s" : ""}
                       </span>
                     </span>
                     <button onClick={(e)=>{e.stopPropagation();setRenameBatiment(bat);setRenameValue(bat.nom);}} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"white", borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:12, marginRight:6 }}>✏️ Renommer</button>
@@ -900,7 +971,7 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                         </tr></thead>
                         <tbody>
                           {bat.missions.map((mission,i)=>(
-                            <tr key={mission.id} style={{ background: isEnAlerte(mission) ? "#fef2f2" : i%2===0?"#f8fafc":"white" }}>
+                            <tr key={mission.id} style={{ background: mission.nonRealise ? "#fef2f2" : isEnAlerte(mission) ? "#fef2f2" : i%2===0?"#f8fafc":"white", opacity: mission.nonRealise ? 0.65 : 1 }}>
                               <td style={{...td,fontWeight:700,color:"#1e3a5f",whiteSpace:"nowrap"}}>
                                 <span style={{ background:missionColors[mission.code]||"#f0f9ff", padding:"3px 8px", borderRadius:5, fontSize:11 }}>{mission.code}</span>
                                 {isEnAlerte(mission) && <span style={{ marginLeft:6, fontSize:11, color:"#dc2626", fontWeight:700 }}>⚠️</span>}
@@ -917,8 +988,25 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                                   : <span style={{ display:"block", textAlign:"center", color:mission.unPropose?"#1e3a5f":"#cbd5e1", fontSize:13, padding:"6px 10px" }}>{mission.unPropose||"—"}</span>}
                               </td>
                               <td style={{...td,textAlign:"center"}}>
-                                <input type="checkbox" checked={mission.realise} onChange={(e)=>editingBatId===bat.id&&updateMission(bat.id,mission.id,"realise",e.target.checked)}
-                                  style={{ width:18,height:18,cursor:editingBatId===bat.id?"pointer":"default",accentColor:"#2563eb",opacity:editingBatId===bat.id?1:0.6 }}/>
+                                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                                  <label style={{ display:"flex", alignItems:"center", gap:4, cursor:editingBatId===bat.id?"pointer":"default" }} title="Réalisé">
+                                    <input type="checkbox" checked={mission.realise} onChange={(e)=>editingBatId===bat.id&&updateMission(bat.id,mission.id,"realise",e.target.checked)}
+                                      style={{ width:18,height:18,cursor:editingBatId===bat.id?"pointer":"default",accentColor:"#2563eb",opacity:editingBatId===bat.id?1:0.6 }}/>
+                                  </label>
+                                  {mission.nonRealise ? (
+                                    <span onClick={()=>editingBatId===bat.id && annulerNonRealise(bat.id, mission.id)}
+                                      title={editingBatId===bat.id ? "Cliquer pour annuler" : "Mission non réalisée"}
+                                      style={{ fontSize:10, color:"#ef4444", fontWeight:700, background:"#fee2e2", padding:"1px 6px", borderRadius:10, cursor:editingBatId===bat.id?"pointer":"default", whiteSpace:"nowrap" }}>
+                                      ⊘ Non réalisé
+                                    </span>
+                                  ) : editingBatId===bat.id && !mission.realise && (
+                                    <button onClick={()=>toggleNonRealise(bat.id, mission.id, mission.code, mission.label)}
+                                      title="Marquer comme non réalisable"
+                                      style={{ fontSize:9, color:"#94a3b8", background:"none", border:"1px dashed #cbd5e1", borderRadius:10, padding:"1px 6px", cursor:"pointer", whiteSpace:"nowrap" }}>
+                                      ⊘ N/A
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                               <td style={td}>
                                 {editingBatId === bat.id ? (
@@ -1001,13 +1089,14 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                   {filteredBatiments.map((bat,i)=>{
                     const batPrevu=bat.missions.reduce((s,m)=>s+(parseFloat(m.unPrevu)||0),0);
                     const batPropose=bat.missions.reduce((s,m)=>s+(parseFloat(m.unPropose)||0),0);
-                    const batRealise=bat.missions.filter(m=>m.realise).length;
+                    const batRealise=bat.missions.filter(m=>m.realise&&!m.nonRealise).length;
+                    const batTotal=bat.missions.filter(m=>!m.nonRealise).length;
                     return (<tr key={bat.id} style={{ background:i%2===0?"#f8fafc":"white" }}>
                       <td style={{...td,fontWeight:700,color:"#1e3a5f",whiteSpace:"nowrap"}}>{bat.nom}</td>
                       {MISSIONS_DEF.map(m=>{ const miss=bat.missions.find(x=>x.code===m.code); return (<td key={m.code} style={{...td,textAlign:"center"}}>{!miss?<span style={{color:"#e2e8f0"}}>–</span>:miss.realise?<span style={{color:"#059669",fontWeight:700}}>✓</span>:(miss.unPropose||miss.unPrevu)?<span style={{color:"#2563eb"}}>{miss.unPropose||miss.unPrevu}</span>:<span style={{color:"#cbd5e1"}}>—</span>}</td>); })}
                       <td style={{...td,textAlign:"center",fontWeight:700,color:"#059669"}}>{batPrevu>0?batPrevu.toFixed(1):"—"}</td>
                       <td style={{...td,textAlign:"center",fontWeight:700,color:"#d97706"}}>{batPropose>0?batPropose.toFixed(1):"—"}</td>
-                      <td style={{...td,textAlign:"center"}}><span style={{ background:batRealise===bat.missions.length?"#d1fae5":batRealise>0?"#fef3c7":"#f1f5f9", color:batRealise===bat.missions.length?"#059669":batRealise>0?"#d97706":"#94a3b8", padding:"3px 10px", borderRadius:20, fontSize:12, fontWeight:700 }}>{batRealise}/{bat.missions.length}</span></td>
+                      <td style={{...td,textAlign:"center"}}><span style={{ background:batRealise===batTotal&&batTotal>0?"#d1fae5":batRealise>0?"#fef3c7":"#f1f5f9", color:batRealise===batTotal&&batTotal>0?"#059669":batRealise>0?"#d97706":"#94a3b8", padding:"3px 10px", borderRadius:20, fontSize:12, fontWeight:700 }}>{batRealise}/{batTotal}</span></td>
                     </tr>);
                   })}
                   <tr style={{ background:"#1e3a5f", fontWeight:700 }}>
@@ -1132,6 +1221,32 @@ function MainApp({ user, commune, onBack, onLogout, logAction }) {
                 style={{ padding:"10px 24px", borderRadius:8, border:"none", background:pickerSelections.length===0?"#93c5fd":"#2563eb", color:"white", fontWeight:700, fontSize:14, cursor:pickerSelections.length===0?"not-allowed":"pointer" }}>
                 Créer le bâtiment ({pickerSelections.length} mission{pickerSelections.length!==1?"s":""})
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modale raison non réalisé */}
+      {nonRealiseModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1001, backdropFilter:"blur(2px)" }}>
+          <div style={{ background:"white", borderRadius:14, padding:"28px 32px", maxWidth:440, width:"90%", boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
+            <div style={{ fontSize:32, textAlign:"center", marginBottom:12 }}>⊘</div>
+            <h2 style={{ margin:"0 0 8px", fontSize:18, color:"#1e3a5f", fontWeight:700, textAlign:"center" }}>Mission non réalisable</h2>
+            <p style={{ color:"#64748b", fontSize:13, margin:"0 0 16px", textAlign:"center" }}>
+              Mission <strong>{nonRealiseModal.code} — {nonRealiseModal.label}</strong>
+            </p>
+            <p style={{ color:"#475569", fontSize:13, margin:"0 0 8px", fontWeight:600 }}>Raison (sera retirée des compteurs) :</p>
+            <textarea
+              value={nonRealiseRaison}
+              onChange={(e)=>setNonRealiseRaison(e.target.value)}
+              placeholder="Ex : Équipement absent du site, erreur de saisie de la demande..."
+              autoFocus
+              rows={3}
+              style={{ width:"100%", padding:"11px 14px", borderRadius:8, border:"1.5px solid #ef4444", fontSize:14, outline:"none", boxSizing:"border-box", marginBottom:20, fontFamily:"inherit", resize:"vertical" }}
+            />
+            <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+              <button onClick={()=>{ setNonRealiseModal(null); setNonRealiseRaison(""); }} style={{ padding:"10px 24px", borderRadius:8, border:"1px solid #e2e8f0", background:"white", color:"#475569", fontWeight:600, fontSize:14, cursor:"pointer" }}>Annuler</button>
+              <button onClick={confirmNonRealise} disabled={!nonRealiseRaison.trim()} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:nonRealiseRaison.trim()?"#ef4444":"#fca5a5", color:"white", fontWeight:700, fontSize:14, cursor:nonRealiseRaison.trim()?"pointer":"not-allowed" }}>Confirmer</button>
             </div>
           </div>
         </div>
