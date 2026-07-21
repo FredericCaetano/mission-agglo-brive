@@ -228,6 +228,7 @@ const missionColors = {
   "HKDB":      "#fef08a", // jaune
   "HKDC":      "#fef08a", // jaune
   "HKCB":      "#fef08a", // jaune
+  "HKCE":      "#fef08a", // jaune
   "HGCA":      "#bae6fd", // bleu ciel
   "HBBC":      "#fecaca", // rouge clair
   "HHCB":      "#e2e8f0", // gris clair
