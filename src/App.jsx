@@ -211,6 +211,7 @@ const MISSIONS_DEF = [
   { code: "HKDB",      label: "GAZ ERP" },
   { code: "HKDC",      label: "GC ERP" },
   { code: "HKCB",      label: "Efficacité énergétique" },
+  { code: "HKCE",      label: "Climatisation" },
   { code: "HGCA",      label: "Foudre" },
   { code: "HBBC",      label: "Tri SSI" },
   { code: "HHCB",      label: "Ascenseur" },
