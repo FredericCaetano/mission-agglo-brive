@@ -77,6 +77,40 @@ async function fetchGlobalStats() {
   };
 }
 
+// Sauvegarder/mettre à jour le contact d'une commune
+async function saveContactCommune(communeId, data) {
+  // Check if exists
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/commune_contacts?commune_id=eq.${communeId}&select=id`,
+    { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+  );
+  const existing = await res.json();
+  if (existing.length > 0) {
+    // UPDATE
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/commune_contacts?commune_id=eq.${communeId}`,
+      { method: "PATCH", headers: { ...H, "Content-Type": "application/json" }, body: JSON.stringify(data) }
+    );
+  } else {
+    // INSERT
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/commune_contacts`,
+      { method: "POST", headers: { ...H, "Content-Type": "application/json" }, body: JSON.stringify({ commune_id: communeId, ...data }) }
+    );
+  }
+}
+
+// Contact d'une commune
+async function fetchContactCommune(communeId) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/commune_contacts?commune_id=eq.${communeId}&select=*`,
+    { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.length > 0 ? data[0] : null;
+}
+
 // Récapitulatif global des missions réalisées
 async function fetchRecapMissions() {
   const res = await fetch(
@@ -211,7 +245,6 @@ const MISSIONS_DEF = [
   { code: "HKDB",      label: "GAZ ERP" },
   { code: "HKDC",      label: "GC ERP" },
   { code: "HKCB",      label: "Efficacité énergétique" },
-  { code: "HKCE",      label: "Climatisation" },
   { code: "HGCA",      label: "Foudre" },
   { code: "HBBC",      label: "Tri SSI" },
   { code: "HHCB",      label: "Ascenseur" },
@@ -228,7 +261,6 @@ const missionColors = {
   "HKDB":      "#fef08a", // jaune
   "HKDC":      "#fef08a", // jaune
   "HKCB":      "#fef08a", // jaune
-  "HKCE":      "#fef08a", // jaune
   "HGCA":      "#bae6fd", // bleu ciel
   "HBBC":      "#fecaca", // rouge clair
   "HHCB":      "#e2e8f0", // gris clair
@@ -319,10 +351,14 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
   const [intervenants, setIntervenants] = useState([]);
   const [communesIntervenantIds, setCommunesIntervenantIds] = useState(null); // null = pas de filtre
   const [showRecap, setShowRecap] = useState(false);
-  const [recapTab, setRecapTab] = useState("par_commune"); // par_commune | tableau
+  const [recapTab, setRecapTab] = useState("par_commune");
   const [recapData, setRecapData] = useState([]);
   const [loadingRecap, setLoadingRecap] = useState(false);
   const [nonRealiseData, setNonRealiseData] = useState([]);
+  const [contactModal, setContactModal] = useState(null); // {commune, contact}
+  const [editingContact, setEditingContact] = useState(false);
+  const [editContactForm, setEditContactForm] = useState({});
+  const [savingContact, setSavingContact] = useState(false);
 
   useEffect(() => {
     if (filtreIntervenant) {
@@ -509,6 +545,15 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
                   style={{ position:"absolute", top:8, right:8, background:"rgba(239,68,68,0.1)", border:"none", borderRadius:6, color:"#ef4444", fontSize:13, fontWeight:700, cursor:"pointer", padding:"3px 7px", lineHeight:1 }}
                   onMouseEnter={(e)=>e.currentTarget.style.background="rgba(239,68,68,0.25)"}
                   onMouseLeave={(e)=>e.currentTarget.style.background="rgba(239,68,68,0.1)"}>✕</button>
+                <button onClick={async(e)=>{
+                  e.stopPropagation();
+                  const contact = await fetchContactCommune(commune.id);
+                  setContactModal({ commune, contact });
+                }} title="Informations de contact"
+                  style={{ position:"absolute", top:8, right:36, background:"rgba(37,99,235,0.1)", border:"none", borderRadius:6, color:"#2563eb", fontSize:13, fontWeight:700, cursor:"pointer", padding:"3px 7px", lineHeight:1 }}
+                  onMouseEnter={(e)=>e.currentTarget.style.background="rgba(37,99,235,0.25)"}
+                  onMouseLeave={(e)=>e.currentTarget.style.background="rgba(37,99,235,0.1)"}
+                >ℹ</button>
               </div>
             ))}
           </div>
@@ -528,6 +573,113 @@ function CommunePage({ user, onSelectCommune, onLogout, logAction }) {
             <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
               <button onClick={()=>setConfirmDelete(null)} style={{ padding:"10px 24px", borderRadius:8, border:"1px solid #e2e8f0", background:"white", color:"#475569", fontWeight:600, fontSize:14, cursor:"pointer" }}>Annuler</button>
               <button onClick={()=>deleteCommune(confirmDelete.id)} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#ef4444", color:"white", fontWeight:700, fontSize:14, cursor:"pointer" }}>Oui, supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONTACT COMMUNE */}
+      {contactModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1001, backdropFilter:"blur(2px)" }}>
+          <div style={{ background:"white", borderRadius:16, maxWidth:480, width:"90%", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", overflow:"hidden", maxHeight:"90vh", display:"flex", flexDirection:"column" }}>
+            {/* Header */}
+            <div style={{ background:"linear-gradient(135deg,#1e3a5f,#2563eb)", padding:"20px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+              <div>
+                <div style={{ color:"rgba(255,255,255,0.7)", fontSize:11, textTransform:"uppercase", letterSpacing:1 }}>Informations de contact</div>
+                <h2 style={{ margin:"4px 0 0", color:"white", fontSize:18, fontWeight:700 }}>🏘️ {contactModal.commune.nom}</h2>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                {!editingContact && (
+                  <button onClick={()=>{ setEditingContact(true); setEditContactForm(contactModal.contact || { nom_contact:"", adresse_mairie:"", tel_contact:"", tel_mairie:"", email_contact:"", email_mairie:"" }); }}
+                    style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontWeight:600, fontSize:13 }}>
+                    ✏️ Modifier
+                  </button>
+                )}
+                <button onClick={()=>{ setContactModal(null); setEditingContact(false); setEditContactForm({}); }}
+                  style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white", borderRadius:8, padding:"6px 12px", cursor:"pointer", fontWeight:700, fontSize:16 }}>✕</button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div style={{ overflowY:"auto", flex:1 }}>
+              {editingContact ? (
+                <div style={{ padding:"20px 24px" }}>
+                  {[
+                    { key:"nom_contact", icon:"👤", label:"Nom du contact" },
+                    { key:"adresse_mairie", icon:"📍", label:"Adresse mairie" },
+                    { key:"tel_contact", icon:"📞", label:"Tél. contact", type:"tel" },
+                    { key:"tel_mairie", icon:"🏛️", label:"Tél. mairie", type:"tel" },
+                    { key:"email_contact", icon:"✉️", label:"Mail contact", type:"email" },
+                    { key:"email_mairie", icon:"📧", label:"Mail mairie", type:"email" },
+                  ].map(field => (
+                    <div key={field.key} style={{ marginBottom:14 }}>
+                      <label style={{ display:"block", fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.5, marginBottom:4 }}>
+                        {field.icon} {field.label}
+                      </label>
+                      <input
+                        type={field.type || "text"}
+                        value={editContactForm[field.key] || ""}
+                        onChange={e=>setEditContactForm(prev=>({...prev,[field.key]:e.target.value}))}
+                        style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:"1.5px solid #e2e8f0", fontSize:14, outline:"none", boxSizing:"border-box" }}
+                        onFocus={e=>e.target.style.borderColor="#2563eb"}
+                        onBlur={e=>e.target.style.borderColor="#e2e8f0"}
+                      />
+                    </div>
+                  ))}
+                  <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+                    <button onClick={()=>{ setEditingContact(false); setEditContactForm({}); }}
+                      style={{ padding:"9px 20px", borderRadius:8, border:"1px solid #e2e8f0", background:"white", color:"#475569", fontWeight:600, fontSize:14, cursor:"pointer" }}>
+                      Annuler
+                    </button>
+                    <button onClick={async()=>{
+                      setSavingContact(true);
+                      try {
+                        await saveContactCommune(contactModal.commune.id, editContactForm);
+                        setContactModal(prev=>({...prev, contact:{...editContactForm}}));
+                        setEditingContact(false);
+                        setEditContactForm({});
+                      } catch(e) { alert("Erreur : " + e.message); }
+                      finally { setSavingContact(false); }
+                    }} disabled={savingContact}
+                      style={{ padding:"9px 20px", borderRadius:8, border:"none", background:savingContact?"#93c5fd":"#2563eb", color:"white", fontWeight:700, fontSize:14, cursor:savingContact?"not-allowed":"pointer" }}>
+                      {savingContact ? "Enregistrement..." : "💾 Enregistrer"}
+                    </button>
+                  </div>
+                </div>
+              ) : contactModal.contact ? (
+                <div style={{ padding:"20px 24px" }}>
+                  {[
+                    { icon:"👤", label:"Contact", value: contactModal.contact.nom_contact },
+                    { icon:"📍", label:"Adresse", value: contactModal.contact.adresse_mairie },
+                    { icon:"📞", label:"Tél. contact", value: contactModal.contact.tel_contact, href: `tel:${contactModal.contact.tel_contact}` },
+                    { icon:"🏛️", label:"Tél. mairie", value: contactModal.contact.tel_mairie, href: `tel:${contactModal.contact.tel_mairie}` },
+                    { icon:"✉️", label:"Mail contact", value: contactModal.contact.email_contact, href: `mailto:${contactModal.contact.email_contact}` },
+                    { icon:"📧", label:"Mail mairie", value: contactModal.contact.email_mairie, href: `mailto:${contactModal.contact.email_mairie}` },
+                  ].filter(r => r.value).map((row, i) => (
+                    <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"10px 0", borderBottom:"1px solid #f1f5f9" }}>
+                      <span style={{ fontSize:18, width:24, flexShrink:0 }}>{row.icon}</span>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:11, color:"#94a3b8", textTransform:"uppercase", letterSpacing:0.5, marginBottom:2 }}>{row.label}</div>
+                        {row.href ? (
+                          <a href={row.href} style={{ color:"#2563eb", fontWeight:600, fontSize:14, textDecoration:"none" }}
+                            onMouseEnter={(e)=>e.target.style.textDecoration="underline"}
+                            onMouseLeave={(e)=>e.target.style.textDecoration="none"}>
+                            {row.value}
+                          </a>
+                        ) : (
+                          <div style={{ color:"#1e3a5f", fontWeight:600, fontSize:14 }}>{row.value}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding:"40px 24px", textAlign:"center", color:"#94a3b8" }}>
+                  <div style={{ fontSize:32, marginBottom:8 }}>📋</div>
+                  <div style={{ fontWeight:600, color:"#64748b" }}>Aucune information disponible</div>
+                  <div style={{ fontSize:13, marginTop:4 }}>Cliquez sur "Modifier" pour renseigner les coordonnées.</div>
+                </div>
+              )}
             </div>
           </div>
         </div>
